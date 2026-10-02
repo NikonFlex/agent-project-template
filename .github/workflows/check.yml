@@ -1,0 +1,39 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Зависимости скриптов процесса
+        run: pip install -r tools/requirements.txt
+
+      # {{Установка стека, линтер и тесты проекта — заполняет bootstrap, например:}}
+      # - name: Линтер
+      #   run: <команда линтера>
+      # - name: Тесты
+      #   # Ключей в CI нет: тест, которому нужен настоящий API, упадёт — так и задумано.
+      #   run: <команда тестов>
+
+      - name: Копипаста
+        # jscpd ловит скопированные блоки и в одном файле, и между файлами.
+        # Пороги и исключения — в .jscpd.json. Node на раннере уже есть.
+        run: npx -y jscpd@5.3.3 -c .jscpd.json .
+
+      - name: Самопроверка скриптов процесса
+        run: |
+          python3 tools/backlog.py --selftest
+          python3 tools/spec_check.py --selftest
+
+      - name: Спеки и входящие
+        run: python3 tools/spec_check.py

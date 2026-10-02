@@ -1,0 +1,19 @@
+# ключи
+.env
+.env.*
+!.env.example
+
+# выходы прогонов: в git — отобранные примеры, а не все прогоны
+outputs/
+
+# локальные настройки агента
+.claude/settings.local.json
+CLAUDE.local.md
+
+# среда
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+
+# {{каталоги сборки и окружения стека}}

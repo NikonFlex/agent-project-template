@@ -1,0 +1,11 @@
+# Индекс входящих документов. Порядок работы — docs/SPEC-DRIVEN.md.
+# Проверка: python3 tools/spec_check.py
+# Запись:
+# - path: docs/incoming/<имя>.md
+#   received: 'ГГГГ-ММ-ДД'
+#   source: откуда и от кого
+#   status: incoming        # incoming → reviewed → distilled | rejected | superseded
+#   sha256: <sha256sum файла>
+#   distilled_into:
+#   - specs/<домен>.md
+[]
