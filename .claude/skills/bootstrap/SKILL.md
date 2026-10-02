@@ -39,7 +39,8 @@ description: Первый заход в проекте, созданном из 
 
 ## 4. Заполнить места `{{…}}`
 
-`grep -rn '{{' --exclude-dir=.git .` — пройти все. Что хозяин не знает — оставить
+`grep -rn '{{' --exclude-dir=.git --exclude-dir=.claude --exclude-dir=tools .` — пройти все
+(в навыках и скриптах `{{` стоит законно). Что хозяин не знает — оставить
 `DECISION <дата>` с разумным умолчанием (как в `docs/SPEC-DRIVEN.md`), а не `{{…}}`.
 Схему в `AGENTS.md` на первом заходе можно оставить одним абзацем — она рисуется,
 когда появится замысел.
@@ -63,7 +64,7 @@ description: Первый заход в проекте, созданном из 
 ## 7. Проверить и зафиксировать
 
 ```
-grep -rn '{{' --exclude-dir=.git .        # пусто
+grep -rn '{{' --exclude-dir=.git --exclude-dir=.claude --exclude-dir=tools .   # пусто
 python3 tools/backlog.py --selftest
 python3 tools/spec_check.py --selftest
 python3 tools/spec_check.py
