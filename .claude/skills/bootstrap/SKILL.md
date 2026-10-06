@@ -41,24 +41,26 @@ description: Первый заход в проекте, созданном из 
 
 ## 4. Заполнить места `{{…}}`
 
-`grep -rn '{{' --exclude-dir=.git --exclude-dir=.claude --exclude-dir=tools .` — пройти все
-(в навыках и скриптах `{{` стоит законно). Что хозяин не знает — оставить
+`grep -rn '{{' --exclude-dir=.git --exclude-dir=skills --exclude-dir=tools .` — пройти все
+(в навыках и скриптах `{{` стоит законно; в `.claude/rules/` — нет). Что хозяин не знает — оставить
 `DECISION <дата>` с разумным умолчанием (как в `docs/SPEC-DRIVEN.md`), а не `{{…}}`.
 Схему в `CLAUDE.md` на первом заходе можно оставить одним абзацем — она рисуется,
 когда появится замысел.
 
 ## 5. Подстроить проверки под стек
 
-Стек по умолчанию — Python: `ruff.toml`, ruff и pytest в CI и в «Перед коммитом»,
-Python-блок в `.gitignore`.
+Стек по умолчанию — Python: `ruff.toml`, ruff и pytest в `tools/check.sh` (его запускают CI
+и хук перед коммитом), Python-блок в `.gitignore`.
 
 - **Python** — `ruff check .` и `pytest` уже стоят. Проверить, что оба проходят; `pytest`
   с кодом 5 («тестов нет») в CI не ошибка. Зависимости проекта — `requirements.txt`,
   CI его ставит, если файл есть.
 - **Другой язык** — заменить на линтер и тесты стека:
-  - `CLAUDE.md`, «Стек», «Перед коммитом» и последний пункт «Код» — команды и чем в этом
+  - `tools/check.sh` — линтер и тесты стека вместо ruff и pytest;
+  - `CLAUDE.md`, «Стек»;
+  - `.claude/rules/code.md` — `paths` под расширения стека; последний пункт — чем в этом
     языке проверяются правила (сложность, enum, импорт без псевдонимов);
-  - `.github/workflows/check.yml` — шаги «Зависимости», «Линтер», «Тесты»;
+  - `.github/workflows/check.yml` — шаг «Зависимости»;
   - `.gitignore` — Python-блок на каталоги сборки и окружения стека;
   - `ruff.toml` — удалить, если Python в проекте нет (скрипты в `tools/` линтер не требуют).
 - `.jscpd.json` — что не проверять (сгенерированный код, зависимости).
@@ -80,7 +82,7 @@ Python-блок в `.gitignore`.
 ## 7. Проверить и зафиксировать
 
 ```
-grep -rn '{{' --exclude-dir=.git --exclude-dir=.claude --exclude-dir=tools .   # пусто
+grep -rn '{{' --exclude-dir=.git --exclude-dir=skills --exclude-dir=tools .    # пусто
 ruff check .                     # или линтер стека
 pytest                           # или тесты стека
 python3 tools/backlog.py --selftest

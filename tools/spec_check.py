@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 import yaml
+from selftest_report import report
 
 INCOMING = Path("docs/incoming")
 SPECS = Path("specs")
@@ -237,12 +238,8 @@ def selftest() -> int:
             spoil(root)
             if not any(expected in p for p in run(root)):
                 bad.append(f"не поймано: {name}")
-    for line in bad:
-        print("✗ " + line)
-    if not bad:
-        n = len(DEFECTS)
-        print(f"самопроверка пройдена: чистый проект чист, поймано нарушений {n} из {n}")
-    return 1 if bad else 0
+    n = len(DEFECTS)
+    return report(bad, f"чистый проект чист, поймано нарушений {n} из {n}")
 
 
 def main() -> int:
