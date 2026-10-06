@@ -3,6 +3,7 @@
 
     python3 tools/claude_hooks.py after-compact   SessionStart, matcher compact
     python3 tools/claude_hooks.py is-commit       PreToolUse Bash: JSON вызова на stdin
+    python3 tools/claude_hooks.py context         UserPromptSubmit: JSON на stdin
     python3 tools/claude_hooks.py --selftest
 
 after-compact — после сжатия контекста напомнить, над какой задачей работали: номер — из
@@ -12,6 +13,11 @@ after-compact — после сжатия контекста напомнить,
 is-commit — код 0, если команда Bash делает `git commit`, иначе 1. Фильтр `if` в
 settings.json приблизительный: на командах с `$VAR` и `$()` Claude Code запускает хук
 всегда, и без этой проверки красное дерево блокировало бы любую такую команду.
+
+context — сколько контекста занято: по `usage` последнего ответа основной сессии в журнале
+(`transcript_path`). Ниже первого порога молчит, выше — одна строка; что делать на каждом
+пороге — CLAUDE.md, «Контекст». Окно и пороги — `.claude/context.json`. В хук Claude Code
+заполненность не передаёт, а сам хук не может запустить /compact — только подсказать.
 """
 
 from __future__ import annotations
@@ -67,6 +73,50 @@ def reminder(root: Path, current: str) -> str:
     return "\n".join(lines)
 
 
+#: Хвост журнала, в котором ищем последний ответ: журнал бывает в десятки мегабайт.
+TAIL_BYTES = 4 * 1024 * 1024
+
+
+def used_tokens(transcript: Path) -> int | None:
+    """Токены в окне на последнем ответе основной сессии: вход, запись и чтение кэша."""
+    with transcript.open("rb") as fh:
+        fh.seek(max(0, transcript.stat().st_size - TAIL_BYTES))
+        lines = fh.read().decode("utf-8", errors="ignore").splitlines()
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        usage = (entry.get("message") or {}).get("usage")
+        if entry.get("type") == "assistant" and usage and not entry.get("isSidechain"):
+            return sum(usage.get(k) or 0 for k in
+                       ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+    return None
+
+
+def context_line(used: int, cfg: dict) -> str:
+    """Строка для Claude или пусто, если ниже всех порогов."""
+    window = cfg["window_tokens"]
+    percent = round(100 * used / window)
+    passed = [(p, name) for name, p in cfg["thresholds"].items() if percent >= p]
+    if not passed:
+        return ""
+    limit, name = max(passed)
+    line = (f"Контекст: {percent}% ({used // 1000}k из {window // 1000}k), порог «{name}» "
+            f"({limit}%) — что делать: CLAUDE.md, «Контекст».")
+    if percent > 100:
+        line += " Больше 100%: окно больше, чем window_tokens в .claude/context.json — поправить."
+    return line
+
+
+def context_hook(root: Path, call: dict) -> str:
+    path = Path(call.get("transcript_path") or "")
+    if not path.is_file() or (used := used_tokens(path)) is None:
+        return ""
+    cfg = json.loads((root / ".claude/context.json").read_text(encoding="utf-8"))
+    return context_line(used, cfg)
+
+
 def is_commit(call: dict) -> bool:
     return bool(GIT_COMMIT.search((call.get("tool_input") or {}).get("command") or ""))
 
@@ -90,7 +140,31 @@ def selftest() -> int:
     others = ["git log --grep commit", "echo ${PIPESTATUS[0]}", "git status", "git reset HEAD~1"]
     bad += [f"is-commit ошибся на {c!r}" for c in commits if not is_commit(bash(c))]
     bad += [f"is-commit ошибся на {c!r}" for c in others if is_commit(bash(c))]
-    return report(bad, "after-compact: задача по ветке, разделы; is-commit: коммит и не коммит")
+    bad += check_context()
+    return report(bad, "after-compact: задача по ветке, разделы; is-commit: коммит и не коммит; "
+                       "context: токены основной сессии, пороги")
+
+
+def check_context() -> list[str]:
+    cfg = {"window_tokens": 200000, "thresholds": {"new_chat": 40, "compact": 60, "urgent": 80}}
+    usage = {"input_tokens": 2, "cache_creation_input_tokens": 1000,
+             "cache_read_input_tokens": 129000}
+    side = {"usage": {"input_tokens": 9}}
+    entries = [{"type": "assistant", "message": {"usage": usage}},
+               {"type": "assistant", "isSidechain": True, "message": side},
+               {"type": "user", "message": {"content": "x"}}]
+    with tempfile.TemporaryDirectory() as tmp:
+        log = Path(tmp) / "t.jsonl"
+        log.write_text("\n".join(json.dumps(e) for e in entries) + "\n{битая строка\n",
+                       encoding="utf-8")
+        used = used_tokens(log)
+    line = context_line(130002, cfg)
+    return [why for ok, why in [
+        (used == 130002, f"context: насчитал {used}, а не 130002 (субагент не считается)"),
+        (context_line(70000, cfg) == "", "context: ниже порогов должен молчать"),
+        ("65%" in line and "«compact»" in line, f"context: не тот порог: {line!r}"),
+        ("Больше 100%" in context_line(260000, cfg), "context: нет подсказки про окно"),
+    ] if not ok]
 
 
 def bash(command: str) -> dict:
@@ -106,6 +180,10 @@ def main() -> int:
         return 0
     if sys.argv[1:] == ["is-commit"]:
         return 0 if is_commit(json.load(sys.stdin)) else 1
+    if sys.argv[1:] == ["context"]:
+        if line := context_hook(root, json.load(sys.stdin)):
+            print(line)
+        return 0
     print(__doc__)
     return 2
 

@@ -1,0 +1,8 @@
+{
+  "window_tokens": 200000,
+  "thresholds": {
+    "new_chat": 40,
+    "compact": 60,
+    "urgent": 80
+  }
+}

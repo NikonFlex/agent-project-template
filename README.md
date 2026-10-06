@@ -39,7 +39,8 @@ claude            # и в чате: /bootstrap
 | `tools/backlog.py` | GitHub Issues ↔ `docs/tasks/`: sync, review, resume, new, comment |
 | `tools/spec_check.py` | проверки входящих и спек, с самопроверкой |
 | `tools/check.sh` | все проверки одним списком: запускают CI и хук перед `git commit` |
-| `tools/claude_hooks.py` | хуки Claude Code: после сжатия контекста — напомнить текущую задачу |
+| `tools/claude_hooks.py` | хуки Claude Code: занятость контекста, задача после сжатия, коммит ли это |
+| `.claude/context.json` | размер окна и пороги, на которых Claude предлагает `/compact` или новый чат |
 | `.github/workflows/check.yml` | CI: ставит зависимости и запускает `tools/check.sh` |
 | `ruff.toml` | настройки линтера; `tools/backlog.py` исключён — готовый инструмент |
 
