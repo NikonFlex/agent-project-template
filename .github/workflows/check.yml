@@ -15,15 +15,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Зависимости скриптов процесса
-        run: pip install -r tools/requirements.txt
+      # Стек по умолчанию — Python. Другой язык — /bootstrap заменяет зависимости,
+      # линтер и тесты на свои; шаги процесса ниже остаются.
+      - name: Зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest -r tools/requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # {{Установка стека, линтер и тесты проекта — заполняет bootstrap, например:}}
-      # - name: Линтер
-      #   run: <команда линтера>
-      # - name: Тесты
-      #   # Ключей в CI нет: тест, которому нужен настоящий API, упадёт — так и задумано.
-      #   run: <команда тестов>
+      - name: Линтер
+        run: ruff check .
+
+      - name: Тесты
+        # Ключей в CI нет: тест, которому нужен настоящий API, упадёт — так и задумано.
+        # Код 5 у pytest — «тестов не найдено»: пока их нет, это не ошибка.
+        run: |
+          pytest -q || code=$?
+          if [ "${code:-0}" -ne 0 ] && [ "${code:-0}" -ne 5 ]; then exit "$code"; fi
 
       - name: Копипаста
         # jscpd ловит скопированные блоки и в одном файле, и между файлами.
