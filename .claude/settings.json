@@ -8,8 +8,7 @@
       "Bash(gh issue close:*)",
       "Bash(gh issue delete:*)",
       "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
-      "Bash(gh repo delete:*)"
+      "Bash(git push -f:*)"
     ]
   },
   "hooks": {
