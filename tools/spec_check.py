@@ -6,6 +6,8 @@
 Нужен PyYAML: pip install -r tools/requirements.txt
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import re
@@ -21,16 +23,25 @@ SERVICE_FILES = {"README.md", "index.yaml"}
 HEADER_FIELDS = ("Статус", "Источники:", "Владелец дельт")
 # Спека не хранит состояние задач: рядом со ссылкой на задачу этих слов быть не должно.
 TASK_STATE = re.compile(r"\b(открыт[аы]?|закрыт[аы]?|сделан[аы]?|в работе|готов[аы]?)\b", re.I)
+# Пометка дельты: *(дельта 28.09, ab#7, ТЗ v2 §3 — было «сразу»)* — содержимое скобок.
+DELTA = re.compile(r"\(дельта\b([^)]*)\)")
 
 
-def task_ref(root: Path) -> re.Pattern:
-    """Ссылка на задачу: `#12`, а с префиксом из .backlog.json — `ab#12` и `ab-0012`."""
+def backlog_config(root: Path) -> dict:
+    """Префикс и папка задач — из .backlog.json, как у tools/backlog.py."""
     config = root / ".backlog.json"
-    prefix = None
-    if config.exists():
-        prefix = json.loads(config.read_text(encoding="utf-8")).get("prefix")
-    named = rf"|{re.escape(prefix)}#\d+|{re.escape(prefix)}-\d{{4}}" if prefix else ""
-    return re.compile(rf"(#\d+{named})")
+    cfg = json.loads(config.read_text(encoding="utf-8")) if config.exists() else {}
+    return {"prefix": cfg.get("prefix"), "tasks": root / cfg.get("tasks_dir", "docs/tasks")}
+
+
+def task_ref(prefix: str | None) -> re.Pattern:
+    """Ссылка на задачу: `#12`, а с префиксом — `ab#12` и `ab-0012`; номер — группа 1."""
+    named = rf"|{re.escape(prefix)}#(\d+)|{re.escape(prefix)}-(\d{{4}})" if prefix else ""
+    return re.compile(rf"(?<![\w#])(?:#(\d+){named})")
+
+
+def ref_number(match: re.Match) -> int:
+    return int(next(g for g in match.groups() if g))
 
 
 def sha256(path: Path) -> str:
@@ -85,6 +96,32 @@ def check_spec(path: Path, ref: re.Pattern) -> list[str]:
     return problems
 
 
+def check_deltas(path: Path, ref: re.Pattern, tasks: Path, incoming: set[str]) -> list[str]:
+    """Дельта называет основание: задачу из docs/tasks/ или документ из index.yaml."""
+    problems = []
+    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        for delta in DELTA.findall(line):
+            where = f"{path.name}:{n}"
+            refs = list(ref.finditer(delta))
+            docs = [name for name in incoming if f"incoming/{name}" in delta]
+            if not refs and not docs:
+                problems.append(f"{where}: у дельты нет основания — задачи или incoming/<файл>")
+            if "incoming/" in delta and not docs:
+                problems.append(f"{where}: дельта ссылается на документ, которого нет в index.yaml")
+            problems += [f"{where}: дельта ссылается на задачу {m.group(0)}, её нет в {tasks.name}/"
+                         for m in refs if not task_file(tasks, ref_number(m))]
+    return problems
+
+
+def task_file(tasks: Path, number: int) -> bool:
+    return any(tasks.glob(f"*-{number:04d}.md"))
+
+
+def incoming_names(root: Path) -> set[str]:
+    index = yaml.safe_load((root / INCOMING / "index.yaml").read_text(encoding="utf-8")) or []
+    return {Path(entry["path"]).name for entry in index}
+
+
 def open_section(text: str) -> str:
     match = re.search(r"^## Открыто\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
     return match.group(1).strip() if match else ""
@@ -116,9 +153,11 @@ def check_entities(root: Path) -> list[str]:
 
 def run(root: Path) -> list[str]:
     problems = check_incoming(root) + check_entities(root)
-    ref = task_ref(root)
+    cfg = backlog_config(root)
+    ref = task_ref(cfg["prefix"])
+    incoming = incoming_names(root)
     for path in spec_files(root):
-        problems += check_spec(path, ref)
+        problems += check_spec(path, ref) + check_deltas(path, ref, cfg["tasks"], incoming)
     return problems
 
 
@@ -138,6 +177,11 @@ GOOD_SPEC = """# Accounts
 
 Ссылка на задачу ab#3 без состояния.
 
+## Правила
+
+1. Вход по почте *(дельта 28.09, ab#3)*.
+2. Почта в нижнем регистре *(дельта 29.09, incoming/тз.md §2)*.
+
 ## Открыто
 
 - вопрос
@@ -152,6 +196,10 @@ DEFECTS = {
     "пустое «Открыто»": (lambda r: edit(r, "- вопрос\n", ""), "Открыто"),
     "состояние задачи в спеке": (lambda r: edit(r, "без состояния", "закрыта"), "состояние"),
     "сущность не объявлена": (lambda r: edit(r, "### User", "### Person"), "нигде"),
+    "дельта без основания": (lambda r: edit(r, "28.09, ab#3", "28.09, по разговору"), "основания"),
+    "дельта на несуществующую задачу": (lambda r: edit(r, "28.09, ab#3", "28.09, ab#9"), "ab#9"),
+    "дельта на документ не из индекса": (
+        lambda r: edit(r, "incoming/тз.md", "incoming/старое.md"), "на документ, которого"),
 }
 
 
@@ -164,6 +212,8 @@ def make_project(root: Path) -> Path:
     (root / INCOMING).mkdir(parents=True)
     (root / SPECS).mkdir()
     (root / ".backlog.json").write_text('{"prefix": "ab"}')
+    (root / "docs/tasks").mkdir()
+    (root / "docs/tasks/ab-0003.md").write_text("# ab#3 — задача", encoding="utf-8")
     doc = root / INCOMING / "тз.md"
     doc.write_text("текст ТЗ", encoding="utf-8")
     entry = {"path": "docs/incoming/тз.md", "status": "distilled", "sha256": sha256(doc),
