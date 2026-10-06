@@ -332,8 +332,8 @@ def index_page(issues: list[dict], board: dict, cfg: dict, stamp: str) -> str:
         "# Задачи", "",
         f"Снято {stamp} · задач {len(issues)}: открытых {open_n}, закрытых {len(issues) - open_n}.",
         "Обновляет `backlog.py sync`. Искать по задачам — `grep -ri <слово> docs/tasks/`.", "",
-        "| Задача | Состояние | Доска | Название | Разбор |",
-        "|---|---|---|---|---|",
+        "| Задача | Состояние | Доска | Milestone | Название | Разбор |",
+        "|---|---|---|---|---|---|",
     ]
     for i in sorted(issues, key=lambda x: x.get("updatedAt") or "", reverse=True):
         fname = f"{cfg['prefix']}-{i['number']:04d}.md"
@@ -342,7 +342,9 @@ def index_page(issues: list[dict], board: dict, cfg: dict, stamp: str) -> str:
         ours = "есть" if has_ours(cfg["tasks"] / fname) else "—"
         title = i["title"].replace("|", "\\|")
         status = board.get(i["number"], {}).get("status") or "—"
-        lines.append(f"| [{cfg['prefix']}#{i['number']}]({target}) | {state} | {status} | {title} | {ours} |")
+        milestone = (i.get("milestone") or {}).get("title") or "—"
+        lines.append(f"| [{cfg['prefix']}#{i['number']}]({target}) | {state} | {status} | "
+                     f"{milestone} | {title} | {ours} |")
     return "\n".join(lines) + "\n"
 
 
@@ -511,6 +513,30 @@ def split_draft(path: Path) -> tuple[str, str, str]:
     return lines[0][2:].strip(), "\n".join(lines[1:]).strip(), ours
 
 
+#: Строка черновика `Milestone: MVP` — поле задачи в GitHub, а не текст: в тело не идёт.
+MILESTONE_LINE = re.compile(r"^Milestone:[ \t]*(.*?)[ \t]*$\n?", re.M)
+
+
+def draft_milestone(body: str) -> tuple[str | None, str]:
+    """Тело черновика → milestone (None, если не указан или «—») и тело без этой строки."""
+    m = MILESTONE_LINE.search(body)
+    if not m:
+        return None, body
+    name = m.group(1) if m.group(1) not in ("", "—", "-") else None
+    return name, (body[:m.start()] + body[m.end():]).strip()
+
+
+def missing_milestone(repo: str, name: str | None) -> str:
+    """Пусто, если milestone есть в GitHub (или не указан); иначе — что сказать."""
+    if not name:
+        return ""
+    have = gh("api", f"repos/{repo}/milestones?state=open&per_page=100", "--jq", ".[].title").split("\n")
+    if name in have:
+        return ""
+    listed = ", ".join(h for h in have if h) or "нет ни одного"
+    return f"milestone «{name}» в {repo} нет (открытые: {listed}). Завести на GitHub или поправить черновик."
+
+
 def gh_with_body(args: list[str], body: str) -> str:
     """Вызов gh с телом через файл: кавычки и переносы в тексте не ломают команду."""
     with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8", delete=False) as fh:
@@ -526,28 +552,43 @@ def cmd_new(cfg: dict, draft: str, labels: list[str], confirm: bool) -> int:
     if not path.exists():
         sys.exit(f"нет файла {draft}")
     title, body, ours = split_draft(path)
+    milestone, body = draft_milestone(body)
     leaks = scan_secrets("черновик", title + "\n" + body)
     if leaks:
         print("В черновике похоже на пароль или ключ — наружу не отправляю:\n  " + "\n  ".join(leaks))
         return 2
     print(f"репозиторий : {cfg['repo']}\nзаголовок   : {title}\nметки       : {', '.join(labels) or '—'}")
+    print(f"milestone   : {milestone or '—'}")
     print("--- тело ---\n" + body + "\n--- конец ---")
+    if problem := missing_milestone(cfg["repo"], milestone):
+        print("\n" + problem)
+        return 2
     if not confirm:
         print("\nНичего не заведено. Повторить с --confirm, когда владелец сказал «да».")
         return 1
 
+    number = create_issue(cfg, title, body, labels, milestone)
+    target = cfg["tasks"] / f"{cfg['prefix']}-{number:04d}.md"
+    target.write_text(ours if ours.endswith("\n") else ours + "\n", encoding="utf-8")
+    path.unlink()
+    print(f"черновик → {target.name}; верх допишет sync:")
+    code = cmd_sync(cfg, check=False)
+    print(f"\nзаведена: {cfg['prefix']}#{number} «{title}» → milestone {milestone or '—'}")
+    return code
+
+
+def create_issue(cfg: dict, title: str, body: str, labels: list[str], milestone: str | None) -> int:
     args = ["issue", "create", "-R", cfg["repo"], "--title", title]
     for lb in labels:
         args += ["--label", lb]
+    if milestone:
+        args += ["--milestone", milestone]
     out = gh_with_body(args, body)
     m = re.search(r"/issues/(\d+)", out)
     if not m:
         sys.exit(f"не понял номер задачи из ответа gh: {out.strip()!r}")
-    target = cfg["tasks"] / f"{cfg['prefix']}-{int(m.group(1)):04d}.md"
-    target.write_text(ours if ours.endswith("\n") else ours + "\n", encoding="utf-8")
-    path.unlink()
-    print(out.strip() + f"\nчерновик → {target.name}; верх допишет sync:")
-    return cmd_sync(cfg, check=False)
+    print(out.strip())
+    return int(m.group(1))
 
 
 def cmd_comment(cfg: dict, key: str, sections: list[str], confirm: bool) -> int:
@@ -621,13 +662,22 @@ def selftest() -> int:
         if (title, body) != ("Черновик", "текст") or MARK not in ours:
             bad.append("черновик без метки разобран неверно")
 
+        if draft_milestone("Milestone: MVP\n\nтекст") != ("MVP", "текст") \
+                or draft_milestone("текст\nMilestone: —\n") != (None, "текст") \
+                or draft_milestone("текст") != (None, "текст"):
+            bad.append("строка Milestone в черновике разобрана неверно")
+        page = index_page([{**issue, "milestone": {"title": "MVP"}}], {}, {"prefix": "g", "tasks": d}, "т")
+        if "| MVP |" not in page:
+            bad.append("в INDEX нет колонки Milestone")
+
     if not scan_secrets("x", "ghp_" + "a" * 36) or scan_secrets("x", "передать token в заголовке"):
         bad.append("сито секретов ошибается")
 
     for b in bad:
         print("✗ " + b)
     if not bad:
-        print("самопроверка пройдена: низ переживает sync, review и resume работают, сито ловит ключи")
+        print("самопроверка пройдена: низ переживает sync, review и resume работают, "
+              "Milestone из черновика и в INDEX, сито ловит ключи")
     return 1 if bad else 0
 
 
