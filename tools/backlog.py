@@ -216,7 +216,7 @@ def upper_half(prefix: str, issue: dict, card: dict, stamp: str) -> str:
         f"| **Состояние** | {state} |",
         f"| **Доска** | {card.get('status') or '—'} |",
         f"| **Метки** | {labels} |",
-        f"| **Веха** | {(issue.get('milestone') or {}).get('title', '—')} |",
+        f"| **Milestone** | {(issue.get('milestone') or {}).get('title', '—')} |",
         f"| **Автор** | {who(issue.get('author'))} |",
         f"| **Исполнитель** | {assignees} |",
         f"| **Создана** | {when(issue.get('createdAt'))} |",
