@@ -21,6 +21,30 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "timeout": 300,
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/claude_hooks.py\" is-commit || exit 0; sh \"$CLAUDE_PROJECT_DIR/tools/check.sh\" >&2 || { echo 'Коммит остановлен: проверки не прошли (вывод выше). Исправить и закоммитить снова.' >&2; exit 2; }"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/claude_hooks.py\" after-compact"
+          }
+        ]
+      }
     ]
   }
 }

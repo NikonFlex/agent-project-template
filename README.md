@@ -23,11 +23,11 @@ claude            # и в чате: /bootstrap
 
 | Путь | Зачем |
 |---|---|
-| `CLAUDE.md` | правила работы — Claude Code читает при каждом запуске |
-| `.claude/settings.json` | `.env` не читается; закрытие и удаление задач, force-push — с подтверждения |
+| `CLAUDE.md` | правила работы — Claude Code читает при каждом запуске (держим до 200 строк) |
+| `.claude/rules/` | правила по темам, подгружаются при работе с файлами: код, спеки, задачи |
+| `.claude/settings.json` | `.env` не читается; закрытие и удаление задач, force-push — с подтверждения; хуки |
 | `.claude/hooks/task-reminder.sh` | перед каждым сообщением напоминает: сначала задача |
-| `.claude/commands/` | `/task` — задачи на диске, `/journal` — журнал и уроки |
-| `.claude/skills/` | `/bootstrap` — первый заход, `/catchup` — где остановились |
+| `.claude/skills/` | `/bootstrap` — первый заход, `/catchup` — где остановились, `/task` — задачи на диске, `/journal` — журнал и уроки |
 | `docs/SPEC-DRIVEN.md` | порядок «входящие → спеки → дельты» |
 | `docs/WHY.md` | почему правила и задачи устроены так |
 | `docs/examples/tasks/` | устройство файла задачи и образцы: в работе, закрытая, черновик |
@@ -37,8 +37,10 @@ claude            # и в чате: /bootstrap
 | `docs/journal/` | журнал эпизодов и уроки (`INSIGHTS.md` уже засеян) |
 | `docs/decisions.md`, `docs/dev-plan.md` | почему так выбрали; как строим |
 | `tools/backlog.py` | GitHub Issues ↔ `docs/tasks/`: sync, review, resume, new, comment |
-| `tools/spec_check.py` | проверки входящих и спек (в CI), с самопроверкой |
-| `.github/workflows/check.yml` | CI: ruff, pytest, копипаста, самопроверки, спеки |
+| `tools/spec_check.py` | проверки входящих и спек, с самопроверкой |
+| `tools/check.sh` | все проверки одним списком: запускают CI и хук перед `git commit` |
+| `tools/claude_hooks.py` | хуки Claude Code: после сжатия контекста — напомнить текущую задачу |
+| `.github/workflows/check.yml` | CI: ставит зависимости и запускает `tools/check.sh` |
 | `ruff.toml` | настройки линтера; `tools/backlog.py` исключён — готовый инструмент |
 
 ## Как идёт работа
