@@ -97,7 +97,8 @@ def used_tokens(transcript: Path) -> int | None:
 def context_line(used: int, cfg: dict) -> str:
     """Строка для Claude или пусто, если ниже всех порогов."""
     window = cfg["window_tokens"]
-    percent = round(100 * used / window)
+    # вниз, не round: 39,5% — ещё не порог 40%, и показанное число совпадает со сравнением
+    percent = 100 * used // window
     passed = [(p, name) for name, p in cfg["thresholds"].items() if percent >= p]
     if not passed:
         return ""
@@ -162,6 +163,7 @@ def check_context() -> list[str]:
     return [why for ok, why in [
         (used == 130002, f"context: насчитал {used}, а не 130002 (субагент не считается)"),
         (context_line(70000, cfg) == "", "context: ниже порогов должен молчать"),
+        (context_line(79000, cfg) == "", "context: 39,5% округлилось до порога 40%"),
         ("65%" in line and "«compact»" in line, f"context: не тот порог: {line!r}"),
         ("Больше 100%" in context_line(260000, cfg), "context: нет подсказки про окно"),
     ] if not ok]
