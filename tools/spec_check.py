@@ -26,7 +26,9 @@ TASK_STATE = re.compile(r"\b(открыт[аы]?|закрыт[аы]?|сдела�
 def task_ref(root: Path) -> re.Pattern:
     """Ссылка на задачу: `#12`, а с префиксом из .backlog.json — `ab#12` и `ab-0012`."""
     config = root / ".backlog.json"
-    prefix = json.loads(config.read_text(encoding="utf-8")).get("prefix") if config.exists() else None
+    prefix = None
+    if config.exists():
+        prefix = json.loads(config.read_text(encoding="utf-8")).get("prefix")
     named = rf"|{re.escape(prefix)}#\d+|{re.escape(prefix)}-\d{{4}}" if prefix else ""
     return re.compile(rf"(#\d+{named})")
 
@@ -144,7 +146,8 @@ GOOD_SPEC = """# Accounts
 #: Нарушение → правка чистого проекта, которая его вызывает, и кусок ожидаемого сообщения.
 DEFECTS = {
     "входящий файл правили": (lambda r: (r / INCOMING / "тз.md").write_text("другое"), "sha256"),
-    "входящий файл без записи": (lambda r: (r / INCOMING / "лишний.md").write_text("x"), "нет в index.yaml"),
+    "входящий файл без записи": (
+        lambda r: (r / INCOMING / "лишний.md").write_text("x"), "нет в index.yaml"),
     "в шапке нет статуса": (lambda r: edit(r, "> **Статус: provisional.**\n", ""), "Статус"),
     "пустое «Открыто»": (lambda r: edit(r, "- вопрос\n", ""), "Открыто"),
     "состояние задачи в спеке": (lambda r: edit(r, "без состояния", "закрыта"), "состояние"),
@@ -165,7 +168,8 @@ def make_project(root: Path) -> Path:
     doc.write_text("текст ТЗ", encoding="utf-8")
     entry = {"path": "docs/incoming/тз.md", "status": "distilled", "sha256": sha256(doc),
              "distilled_into": ["specs/accounts.md"]}
-    (root / INCOMING / "index.yaml").write_text(yaml.safe_dump([entry], allow_unicode=True), encoding="utf-8")
+    index = yaml.safe_dump([entry], allow_unicode=True)
+    (root / INCOMING / "index.yaml").write_text(index, encoding="utf-8")
     (root / SPECS / "README.md").write_text(
         "# Спеки\n\n## Домены\n\n| Спека | Хранит | Ключевые сущности |\n|---|---|---|\n"
         "| accounts.md | пользователи | User |\n", encoding="utf-8")
@@ -186,7 +190,8 @@ def selftest() -> int:
     for line in bad:
         print("✗ " + line)
     if not bad:
-        print(f"самопроверка пройдена: чистый проект чист, поймано нарушений {len(DEFECTS)} из {len(DEFECTS)}")
+        n = len(DEFECTS)
+        print(f"самопроверка пройдена: чистый проект чист, поймано нарушений {n} из {n}")
     return 1 if bad else 0
 
 

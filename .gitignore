@@ -14,6 +14,9 @@ CLAUDE.local.md
 .DS_Store
 .idea/
 .vscode/
-__pycache__/
 
-# {{каталоги сборки и окружения стека}}
+# python — стек по умолчанию; другой стек — /bootstrap меняет этот блок
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
