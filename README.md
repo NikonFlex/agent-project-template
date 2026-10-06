@@ -24,7 +24,7 @@ claude            # и в чате: /bootstrap
 | Путь | Зачем |
 |---|---|
 | `CLAUDE.md` | правила работы — Claude Code читает при каждом запуске |
-| `.claude/settings.json` | `.env` не читается; закрытие задач, удаление репо, force-push — с подтверждения |
+| `.claude/settings.json` | `.env` не читается; закрытие и удаление задач, force-push — с подтверждения |
 | `.claude/hooks/task-reminder.sh` | перед каждым сообщением напоминает: сначала задача |
 | `.claude/commands/` | `/task` — задачи на диске, `/journal` — журнал и уроки |
 | `.claude/skills/` | `/bootstrap` — первый заход, `/catchup` — где остановились |
