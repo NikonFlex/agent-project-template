@@ -1,0 +1,9 @@
+{
+  "deltas_from": 6,
+  "provenance_share_from": 0.15,
+  "chains_from": 1,
+  "stale_after_days": 30,
+  "stale_from": 1,
+  "dead_sources_from": 1,
+  "closed_questions_from": 1
+}
