@@ -18,9 +18,10 @@ run() {
     fi
 }
 
-# Код 5 у pytest — «тестов не найдено»: пока их нет, это не ошибка.
+# Код 5 у pytest — «тестов не найдено»: пока их нет, это не ошибка. `python3 -m pytest`, а не
+# `pytest`: в worktree команда `pytest` берёт editable-пакет, установленный из другой папки.
 pytest_or_none() {
-    pytest -q
+    python3 -m pytest -q
     code=$?
     [ "$code" -eq 0 ] || [ "$code" -eq 5 ]
 }
