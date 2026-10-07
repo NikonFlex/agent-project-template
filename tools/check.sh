@@ -30,6 +30,9 @@ run "pytest" pytest_or_none
 run "backlog.py --selftest" python3 tools/backlog.py --selftest
 run "spec_check.py --selftest" python3 tools/spec_check.py --selftest
 run "claude_hooks.py --selftest" python3 tools/claude_hooks.py --selftest
+run "fpsr.py --selftest" python3 tools/fpsr.py --selftest
+run "context_check.py --selftest" python3 tools/context_check.py --selftest
 run "spec_check.py" python3 tools/spec_check.py
+run "context_check.py" python3 tools/context_check.py
 run "jscpd" npx -y jscpd@5.3.3 -c .jscpd.json .
 exit $failed

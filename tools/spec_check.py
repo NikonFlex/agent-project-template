@@ -9,14 +9,14 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import sys
 import tempfile
 from pathlib import Path
 
 import yaml
-from selftest_report import report
+from project_config import backlog_config
+from script_common import print_problems, report, run_script
 
 INCOMING = Path("docs/incoming")
 SPECS = Path("specs")
@@ -26,13 +26,6 @@ HEADER_FIELDS = ("Статус", "Источники:", "Владелец дел
 TASK_STATE = re.compile(r"\b(открыт[аы]?|закрыт[аы]?|сделан[аы]?|в работе|готов[аы]?)\b", re.I)
 # Пометка дельты: *(дельта 28.09, ab#7, ТЗ v2 §3 — было «сразу»)* — содержимое скобок.
 DELTA = re.compile(r"\(дельта\b([^)]*)\)")
-
-
-def backlog_config(root: Path) -> dict:
-    """Префикс и папка задач — из .backlog.json, как у tools/backlog.py."""
-    config = root / ".backlog.json"
-    cfg = json.loads(config.read_text(encoding="utf-8")) if config.exists() else {}
-    return {"prefix": cfg.get("prefix"), "tasks": root / cfg.get("tasks_dir", "docs/tasks")}
 
 
 def task_ref(prefix: str | None) -> re.Pattern:
@@ -242,16 +235,10 @@ def selftest() -> int:
     return report(bad, f"чистый проект чист, поймано нарушений {n} из {n}")
 
 
-def main() -> int:
-    if "--selftest" in sys.argv:
-        return selftest()
-    root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
-    problems = run(root)
-    for problem in problems:
-        print(problem)
-    print("спеки в порядке" if not problems else f"нарушений: {len(problems)}")
-    return 1 if problems else 0
+def check(root: Path) -> int:
+    root = Path(sys.argv[1]) if len(sys.argv) > 1 else root
+    return print_problems(run(root), "спеки в порядке")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_script(selftest, check))
