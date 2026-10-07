@@ -2,6 +2,9 @@
   "docs": ["CLAUDE.md", "README.md", ".claude/rules/*.md", ".claude/skills/*/SKILL.md",
            "docs/*.md", "docs/examples/tasks/README.md", "docs/incoming/README.md",
            "specs/*.md"],
+  "skip_docs": [],
+  "bases": [],
+  "ignore_patterns": ["^10\\.\\d{4,}/"],
   "ignore_paths": [
     "specs/accounts.md",
     "docs/tasks/g-0012.md",
