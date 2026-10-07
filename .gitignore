@@ -6,6 +6,9 @@
 # выходы прогонов: в git — отобранные примеры, а не все прогоны
 outputs/
 
+# обзор задач — пересоздаёт `backlog.py review`
+docs/tasks/REVIEW.md
+
 # локальные настройки агента
 .claude/settings.local.json
 CLAUDE.local.md
