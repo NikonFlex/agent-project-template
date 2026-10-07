@@ -23,7 +23,10 @@ SPECS = Path("specs")
 SERVICE_FILES = {"README.md", "index.yaml"}
 HEADER_FIELDS = ("Статус", "Источники:", "Владелец дельт")
 # Спека не хранит состояние задач: рядом со ссылкой на задачу этих слов быть не должно.
-TASK_STATE = re.compile(r"\b(открыт[аы]?|закрыт[аы]?|сделан[аы]?|в работе|готов[аы]?)\b", re.I)
+TASK_STATE = re.compile(r"\b(открыт[аоы]?|закрыт[аоы]?|сделан[аоы]?|в работе|готов[аоы]?)\b", re.I)
+# «Рядом» — между ссылкой и словом только знаки и слово «задача»: «#12 закрыта», «ab#7, сделано»,
+# «закрыта задача #12». То же слово дальше по строке — предметная область: «вход закрыт».
+GAP = r"[\s,:;()—–-]{0,4}"
 # Пометка дельты: *(дельта 28.09, ab#7, ТЗ v2 §3 — было «сразу»)* — содержимое скобок.
 DELTA = re.compile(r"\(дельта\b([^)]*)\)")
 
@@ -85,9 +88,16 @@ def check_spec(path: Path, ref: re.Pattern) -> list[str]:
     if not open_section(text):
         problems.append(f"{path.name}: раздел «## Открыто» пуст или отсутствует")
     for n, line in enumerate(text.splitlines(), 1):
-        if ref.search(line) and TASK_STATE.search(line):
+        if state_near_ref(line, ref):
             problems.append(f"{path.name}:{n}: рядом со ссылкой на задачу её состояние")
     return problems
+
+
+def state_near_ref(line: str, ref: re.Pattern) -> bool:
+    state, task = TASK_STATE.pattern, f"(?:{ref.pattern})"
+    after = rf"{task}{GAP}{state}"
+    before = rf"{state}{GAP}(?:задач[аиу]?{GAP})?{task}"
+    return any(re.search(p, line, re.I) for p in (after, before))
 
 
 def check_deltas(path: Path, ref: re.Pattern, tasks: Path, incoming: set[str]) -> list[str]:
@@ -175,6 +185,7 @@ GOOD_SPEC = """# Accounts
 
 1. Вход по почте *(дельта 28.09, ab#3)*.
 2. Почта в нижнем регистре *(дельта 29.09, incoming/тз.md §2)*.
+3. После 5 ошибок вход закрыт на 15 минут *(дельта 30.09, ab#3)*.
 
 ## Открыто
 
@@ -189,6 +200,10 @@ DEFECTS = {
     "в шапке нет статуса": (lambda r: edit(r, "> **Статус: provisional.**\n", ""), "Статус"),
     "пустое «Открыто»": (lambda r: edit(r, "- вопрос\n", ""), "Открыто"),
     "состояние задачи в спеке": (lambda r: edit(r, "без состояния", "закрыта"), "состояние"),
+    "состояние в пометке дельты": (lambda r: edit(r, "28.09, ab#3)", "28.09, ab#3, сделано)"),
+                                   "состояние"),
+    "состояние перед ссылкой": (
+        lambda r: edit(r, "задачу ab#3", "закрыта задача ab#3"), "состояние"),
     "сущность не объявлена": (lambda r: edit(r, "### User", "### Person"), "нигде"),
     "дельта без основания": (lambda r: edit(r, "28.09, ab#3", "28.09, по разговору"), "основания"),
     "дельта на несуществующую задачу": (lambda r: edit(r, "28.09, ab#3", "28.09, ab#9"), "ab#9"),
