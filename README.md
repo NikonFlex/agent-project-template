@@ -27,7 +27,7 @@ claude            # и в чате: /bootstrap
 | `.claude/rules/` | правила по темам, подгружаются при работе с файлами: код, спеки, задачи |
 | `.claude/settings.json` | `.env` не читается; закрытие и удаление задач, force-push — с подтверждения; хуки |
 | `.claude/hooks/task-reminder.sh` | перед каждым сообщением напоминает: сначала задача |
-| `.claude/skills/` | `/bootstrap` — первый заход, `/catchup` — где остановились, `/task` — задачи на диске, `/journal` — журнал и уроки |
+| `.claude/skills/` | `/bootstrap` — первый заход, `/catchup` — где остановились, `/task` — задачи на диске, `/journal` — журнал и уроки, `/contradictions` — противоречия и дыры в контексте |
 | `docs/SPEC-DRIVEN.md` | порядок «входящие → спеки → дельты» |
 | `docs/WHY.md` | почему правила и задачи устроены так |
 | `docs/examples/tasks/` | устройство файла задачи и образцы: в работе, закрытая, черновик |
@@ -40,6 +40,9 @@ claude            # и в чате: /bootstrap
 | `tools/spec_check.py` | проверки входящих и спек, с самопроверкой |
 | `tools/check.sh` | все проверки одним списком: запускают CI и хук перед `git commit` |
 | `tools/claude_hooks.py` | хуки Claude Code: занятость контекста, задача после сжатия, коммит ли это |
+| `tools/context_check.py` | гейт: пути в инструкциях существуют, в коде нет оговорок (`context_check.json`) |
+| `tools/fpsr.py` | FPSR — доля задач, закрытых с первого промпта |
+| `tools/project_config.py`, `tools/script_common.py` | общее для скриптов: настройки задач, точка входа, отчёт |
 | `.claude/context.json` | размер окна и пороги, на которых Claude предлагает `/compact` или новый чат |
 | `.github/workflows/check.yml` | CI: ставит зависимости и запускает `tools/check.sh` |
 | `ruff.toml` | настройки линтера; `tools/backlog.py` исключён — готовый инструмент |

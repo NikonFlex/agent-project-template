@@ -1,0 +1,12 @@
+{
+  "docs": ["CLAUDE.md", "README.md", ".claude/rules/*.md", ".claude/skills/*/SKILL.md",
+           "docs/*.md", "docs/examples/tasks/README.md", "docs/incoming/README.md",
+           "specs/*.md"],
+  "ignore_paths": [
+    "specs/accounts.md",
+    "docs/tasks/g-0012.md",
+    "docs/tasks/draft-bootstrap.md"
+  ],
+  "caveats": ["for now", "placeholder", "simplified", "not verified", "honest caveat",
+              "пока что", "временно", "упрощённо", "упрощенно", "не проверено"]
+}

@@ -28,7 +28,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from selftest_report import report
+from project_config import backlog_config
+from script_common import report, run_script
 
 SECTIONS = ("Чем возобновлять", "Что осталось")
 # git, его ключи (`-C путь`, `--no-pager`), затем подкоманда commit: `git log --grep commit` — нет.
@@ -44,12 +45,6 @@ def branch(root: Path) -> str:
     return head.removeprefix("ref: refs/heads/") if head.startswith("ref:") else ""
 
 
-def tasks_dir(root: Path) -> Path:
-    config = root / ".backlog.json"
-    cfg = json.loads(config.read_text(encoding="utf-8")) if config.exists() else {}
-    return root / cfg.get("tasks_dir", "docs/tasks")
-
-
 def section(text: str, name: str) -> str:
     match = re.search(rf"^## {re.escape(name)}\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
     return match.group(1).strip() if match else ""
@@ -60,7 +55,7 @@ def reminder(root: Path, current: str) -> str:
     if not number:
         return (f"Контекст сжат. Ветка «{current or '—'}» без номера задачи: спросить хозяина, "
                 "над чем работаем, или открыть docs/tasks/INDEX.md. Правила CLAUDE.md в силе.")
-    found = sorted(tasks_dir(root).glob(f"*-{int(number.group(1)):04d}.md"))
+    found = sorted(backlog_config(root)["tasks"].glob(f"*-{int(number.group(1)):04d}.md"))
     if not found:
         return f"Контекст сжат. Ветка {current}: файла задачи нет — `backlog.py sync`."
     text = found[0].read_text(encoding="utf-8")
@@ -173,10 +168,7 @@ def bash(command: str) -> dict:
     return {"tool_name": "Bash", "tool_input": {"command": command}}
 
 
-def main() -> int:
-    if "--selftest" in sys.argv:
-        return selftest()
-    root = Path(__file__).resolve().parents[1]
+def dispatch(root: Path) -> int:
     if sys.argv[1:] == ["after-compact"]:
         print(reminder(root, branch(root)))
         return 0
@@ -191,4 +183,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_script(selftest, dispatch))
