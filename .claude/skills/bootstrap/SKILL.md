@@ -13,7 +13,10 @@ description: Первый заход в проекте, созданном из 
 - `git remote -v` — есть ли репозиторий на GitHub. Нет — спросить хозяина, создать ли
   (`gh repo create <имя> --private --source=. --push`); это действие наружу.
 - `gh auth status`, `python3 --version`, `python3 -c "import yaml"`, `node --version`,
-  для Python-стека — `ruff --version`, `pytest --version`.
+  для Python-стека — `ruff --version`, `pytest --version`, `python3 -m pytest --testmon --version`
+  (`pip install pytest-testmon` — хук перед коммитом гоняет только затронутые тесты).
+- Метка для автомерджа: `gh label create automerge --description "CI сольёт PR после зелёного
+  полного прогона"` — это действие наружу, вместе с созданием репозитория.
   Чего нет — сказать, чем поставить; `pyyaml` — `pip install -r tools/requirements.txt`.
 
 ## 2. Расспросить хозяина — одним пакетом

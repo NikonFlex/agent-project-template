@@ -17,7 +17,7 @@ claude            # и в чате: /bootstrap
 
 Нужны: `git`, `gh` (вошедший в аккаунт: `gh auth login`), `python3` с `pyyaml`
 (`pip install -r tools/requirements.txt`) — на нём написаны скрипты процесса, даже если
-проект на другом языке; `ruff` и `pytest` для Python-стека; `node` — для проверки копипасты.
+проект на другом языке; `ruff`, `pytest` и `pytest-testmon` для Python-стека; `node` — для проверки копипасты.
 
 ## Что внутри
 
@@ -41,7 +41,8 @@ claude            # и в чате: /bootstrap
 | `tools/check.sh` | все проверки одним списком: запускают CI и хук перед `git commit` |
 | `tools/claude_hooks.py` | хуки Claude Code: занятость контекста, задача после сжатия, коммит ли это |
 | `tools/context_check.py` | гейт: пути в инструкциях существуют, в коде нет оговорок (`context_check.json`) |
-| `tools/fpsr.py` | FPSR — доля задач, закрытых с первого промпта |
+| `tools/fpsr.py` | FPSR — доля задач, закрытых с первого промпта, и PR на задачу |
+| `tools/closing_words.py` | close/fix/resolve рядом с номером задачи не пропускают хук и CI: закрывает хозяин |
 | `tools/spec_audit.py` | датчик: не пора ли сжать спеку; `--compare` — смысл после сжатия тот же (`spec_audit.json`) |
 | `tools/project_config.py`, `tools/script_common.py` | общее для скриптов: настройки задач, точка входа, отчёт |
 | `.claude/context.json` | размер окна и пороги, на которых Claude предлагает `/compact` или новый чат |
