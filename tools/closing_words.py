@@ -38,7 +38,10 @@ def found(text: str) -> list[str]:
 def hook(call: dict) -> int:
     """Код 2 — Claude Code остановит команду и покажет причину."""
     command = (call.get("tool_input") or {}).get("command") or ""
-    hits = found(command) if WATCHED.search(command) else []
+    # Смотрим с первого коммита или PR до конца: сообщение и описание идут после команды, а
+    # текст до неё (правка файла, заметки) в историю не попадает.
+    start = WATCHED.search(command)
+    hits = found(command[start.start():]) if start else []
     if hits:
         print(f"Остановлено: {', '.join(hits)} — GitHub закроет задачу при слиянии; {ADVICE}.",
               file=sys.stderr)
@@ -69,6 +72,7 @@ def selftest() -> int:
         ("echo 'Closes #96'", 0),
         ("python3 - <<'EOF'\nтекст: хук перед `git commit`; было `Closes #12`\nEOF", 0),
         ("cd repo && git -C x commit -m 'Fixes #3'", 2),
+        ("python3 - <<'EOF'\nзаметка: было «Closes #12»\nEOF\ngit commit -q -m 'Задача gf#96'", 0),
     ] if (code := hook({"tool_input": {"command": cmd}})) != want]
     pr = {"title": "gf#96: порядок", "body": "Задача gf#96",
           "commits": [{"oid": "abc1234def", "messageHeadline": "x", "messageBody": "closes #96"}]}
