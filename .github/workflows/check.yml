@@ -3,6 +3,17 @@ name: check
 on:
   push:
   pull_request:
+    types: [opened, synchronize, reopened, edited, labeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+# PR, открытый сразу с меткой, даёт события opened и labeled — два прогона и два слияния.
+# Прогоны одного PR (и одной ветки при push) — в одну очередь, устаревший отменяется.
+concurrency:
+  group: check-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
@@ -24,5 +35,36 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Проверки
-        # Список проверок — в tools/check.sh: его же запускает хук перед git commit.
+        # Полный прогон: локально хук гоняет `check.sh --quick` — только затронутые тесты.
         run: sh tools/check.sh
+
+      - name: Слова, закрывающие задачу
+        # Задачу закрывает только хозяин (CLAUDE.md, «Задачи»): close/fix/resolve рядом со
+        # ссылкой в заголовке, описании или коммитах PR закрыли бы её при слиянии.
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr view ${{ github.event.pull_request.number }} --repo "${{ github.repository }}" \
+            --json title,body,commits > pr.json
+          python3 tools/closing_words.py --pr pr.json
+
+  automerge:
+    # PR с меткой automerge сливается, когда полный прогон зелёный. Сливает сам CI: защита
+    # ветки с обязательной проверкой в приватном репозитории на бесплатном тарифе недоступна.
+    needs: check
+    if: >-
+      github.event_name == 'pull_request'
+      && contains(github.event.pull_request.labels.*.name, 'automerge')
+      && !github.event.pull_request.draft
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Слить
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge ${{ github.event.pull_request.number }} --repo "${{ github.repository }}" --merge
