@@ -11,7 +11,7 @@ effort: max
 ## Что читать
 
 - `CLAUDE.md`, `.claude/rules/*.md`, `.claude/skills/*/SKILL.md`, `.claude/settings.json`;
-- `specs/` целиком, `docs/*.md`, `docs/decisions.md`;
+- `openspec/` целиком, `docs/*.md`, `docs/decisions.md`;
 - код: структура каталогов, точки входа, конфиги; комментарии и docstring рядом с кодом,
   который они описывают;
 - последние 15 коммитов и открытые задачи (`docs/tasks/INDEX.md`, низ открытых).

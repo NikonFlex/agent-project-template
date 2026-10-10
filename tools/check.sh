@@ -33,16 +33,25 @@ pytest_or_none() {
     [ "$code" -eq 0 ] || [ "$code" -eq 5 ]
 }
 
+# Строгий валидатор формы спек (openspec/README.md). Версия закреплена: обновлять осознанно,
+# прогнав образцы из docs/examples/openspec/. Корень OpenSpec ищется от папки запуска.
+openspec_validate() {
+    (cd "$1" && OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@1.14.1 \
+        validate --specs --strict --no-interactive)
+}
+
 run "ruff" ruff check .
 run "pytest" pytest_or_none
 run "backlog.py --selftest" python3 tools/backlog.py --selftest
 run "spec_check.py --selftest" python3 tools/spec_check.py --selftest
 run "claude_hooks.py --selftest" python3 tools/claude_hooks.py --selftest
 run "fpsr.py --selftest" python3 tools/fpsr.py --selftest
-run "spec_audit.py --selftest" python3 tools/spec_audit.py --selftest
 run "context_check.py --selftest" python3 tools/context_check.py --selftest
 run "closing_words.py --selftest" python3 tools/closing_words.py --selftest
 run "spec_check.py" python3 tools/spec_check.py
+run "spec_check.py docs/examples" python3 tools/spec_check.py docs/examples
+run "openspec validate --strict" openspec_validate .
+run "openspec validate --strict: docs/examples" openspec_validate docs/examples
 run "context_check.py" python3 tools/context_check.py
 run "jscpd" npx -y jscpd@5.3.3 -c .jscpd.json .
 exit $failed

@@ -6,11 +6,11 @@
 
 | Файл | Что внутри |
 |---|---|
-| [../specs/](../specs/README.md) | **Требования — единственный источник; начинать отсюда** |
+| [../openspec/](../openspec/README.md) | **Требования — единственный источник; начинать отсюда** |
 | [dev-plan.md](dev-plan.md) | План разработки: модули, раскладка репо, этапы, проверка |
 | [decisions.md](decisions.md) | Журнал решений: что выбрали, почему, что отбросили |
 | [incoming/](incoming/README.md) | Входящие документы как получены; не требования |
-| [SPEC-DRIVEN.md](SPEC-DRIVEN.md) | Порядок работы: входящие → спеки → дельты |
+| [SPEC-DRIVEN.md](SPEC-DRIVEN.md) | Порядок работы: входящие → спеки OpenSpec → код |
 | [WHY.md](WHY.md) | Почему правила и задачи устроены так |
 | [examples/tasks/](examples/tasks/README.md) | Устройство файла задачи, команды `backlog.py`, образцы |
 | [journal/](journal/JOURNAL.md) | Журнал эпизодов и уроки ([INSIGHTS](journal/INSIGHTS.md)) |
