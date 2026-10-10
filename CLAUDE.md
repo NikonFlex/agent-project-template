@@ -185,7 +185,8 @@
 
 ### Перед коммитом
 
-`tools/check.sh` — ruff, pytest, самопроверки, `spec_check`, jscpd. Хук перед каждым
+`tools/check.sh` — ruff, pytest, самопроверки, валидатор OpenSpec, `spec_check`,
+`source_check`, jscpd. Хук перед каждым
 `git commit` запускает `check.sh --quick` — из тестов только те, что затрагивает изменённый
 код (`pytest-testmon`), — и не пускает коммит, пока он не прошёл. Коммитить конкретными путями.
 

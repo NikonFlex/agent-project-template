@@ -2,7 +2,7 @@
 paths:
   - "openspec/**"
   - "docs/incoming/**"
-  - "docs/examples/openspec/**"
+  - "docs/examples/project/**"
 ---
 
 # Спеки и входящие

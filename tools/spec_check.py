@@ -1,6 +1,6 @@
 """Проверки входящих и спек OpenSpec, которых нет в валидаторе OpenSpec (openspec/README.md).
 
-Запуск: python3 tools/spec_check.py [корень]   корень — репозиторий или docs/examples
+Запуск: python3 tools/spec_check.py [корень]   корень — репозиторий или docs/examples/project
         python3 tools/spec_check.py --selftest  ловит ли проверка подложенные нарушения
 Код возврата 0 — всё в порядке, 1 — есть нарушения (печатаются по строке).
 Форму (Purpose, MUST, Scenario, 500 знаков) проверяет `openspec validate --strict` в check.sh.
@@ -12,12 +12,11 @@ from __future__ import annotations
 import hashlib
 import re
 import sys
-import tempfile
 from pathlib import Path
 
 import yaml
 from project_config import backlog_config
-from script_common import print_problems, report, run_script
+from script_common import check_root, run_script, selftest_project
 
 INCOMING = Path("docs/incoming")
 SPECS = Path("openspec/specs")
@@ -72,22 +71,10 @@ def check_incoming(root: Path) -> list[str]:
             problems.append(f"индекс: нет файла {entry['path']}")
         elif sha256(path) != entry.get("sha256"):
             problems.append(f"индекс: sha256 не совпадает у {entry['path']} — входящие не правятся")
-        else:
-            problems += check_distilled(root, entry)
     for path in (root / INCOMING).iterdir():
         if path.is_file() and path.name not in SERVICE_FILES and path.name not in listed:
             problems.append(f"индекс: файла {path.name} нет в index.yaml")
     return problems
-
-
-def check_distilled(root: Path, entry: dict) -> list[str]:
-    if entry.get("status") != "distilled":
-        return []
-    targets = entry.get("distilled_into") or []
-    if not targets:
-        return [f"индекс: {entry['path']} — distilled, но distilled_into пуст"]
-    return [f"индекс: {entry['path']} ссылается на несуществующую {t}"
-            for t in targets if not (root / t).exists()]
 
 
 # --------------------------------------------------------------------------- спеки
@@ -165,10 +152,26 @@ def declared(specs: dict[str, str]) -> dict[str, list[str]]:
     return owners
 
 
+def cells(line: str) -> list[str]:
+    """Ячейки строки таблицы; `\\|` внутри ячейки — не граница."""
+    return [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+
+
+def tables(block: str) -> list[tuple[list[str], list[list[str]]]]:
+    """Таблицы блока по порядку: заголовок и строки без строки-разделителя."""
+    groups: list[list[str]] = [[]]
+    for line in block.splitlines():
+        if line.strip().startswith("|"):
+            groups[-1].append(line)
+        elif groups[-1]:
+            groups.append([])
+    return [(cells(g[0]), [cells(r) for r in g[2:]]) for g in groups if g]
+
+
 def table_rows(block: str) -> list[list[str]]:
-    rows = [[c.strip() for c in ln.strip().strip("|").split("|")]
-            for ln in block.splitlines() if ln.strip().startswith("|")]
-    return rows[2:]
+    """Строки первой таблицы блока."""
+    found = tables(block)
+    return found[0][1] if found else []
 
 
 def check_links(specs: dict[str, str], owners: dict[str, list[str]]) -> list[str]:
@@ -272,8 +275,7 @@ DEFECTS = {
     "входящий файл правили": (lambda r: (r / INCOMING / "тз.md").write_text("другое"), "sha256"),
     "входящий файл без записи": (
         lambda r: (r / INCOMING / "лишний.md").write_text("x"), "нет в index.yaml"),
-    "distilled_into на несуществующую спеку": (
-        lambda r: (r / SPECS / "accounts").rename(r / SPECS / "users"), "несуществующую"),
+    "входящего файла нет": (lambda r: (r / INCOMING / "тз.md").unlink(), "нет файла"),
     "нет типа в Purpose": (lambda r: edit(r, "accounts", "Тип: сущность. ", ""), "Тип:"),
     "у сущности нет «Связи»": (lambda r: edit(r, "roles", "## Связи", "## Другое"), "нет раздела"),
     "у экрана «Сущности»": (lambda r: edit(r, "login", "## Тексты", "## Сущности"), "не бывает"),
@@ -315,31 +317,15 @@ def make_project(root: Path) -> Path:
         (root / SPECS / name / "spec.md").write_text(text, encoding="utf-8")
     doc = root / INCOMING / "тз.md"
     doc.write_text("текст ТЗ", encoding="utf-8")
-    entry = {"path": "docs/incoming/тз.md", "status": "distilled", "sha256": sha256(doc),
-             "distilled_into": ["openspec/specs/accounts/spec.md"]}
+    entry = {"path": "docs/incoming/тз.md", "sha256": sha256(doc)}
     index = yaml.safe_dump([entry], allow_unicode=True)
     (root / INCOMING / "index.yaml").write_text(index, encoding="utf-8")
     return root
 
 
 def selftest() -> int:
-    bad = []
-    with tempfile.TemporaryDirectory() as tmp:
-        if problems := run(make_project(Path(tmp) / "clean")):
-            bad.append(f"чистый проект: {problems}")
-        for name, (spoil, expected) in DEFECTS.items():
-            root = make_project(Path(tmp) / name)
-            spoil(root)
-            if not any(expected in p for p in run(root)):
-                bad.append(f"не поймано: {name} — {run(root)}")
-    n = len(DEFECTS)
-    return report(bad, f"чистый проект чист, поймано нарушений {n} из {n}")
-
-
-def check(root: Path) -> int:
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
-    return print_problems(run(Path(args[0]) if args else root), "спеки в порядке")
+    return selftest_project(make_project, run, DEFECTS, lambda root, change: change(root))
 
 
 if __name__ == "__main__":
-    sys.exit(run_script(selftest, check))
+    sys.exit(run_script(selftest, check_root(run, "спеки в порядке")))

@@ -31,6 +31,7 @@ claude            # и в чате: /bootstrap
 | `docs/SPEC-DRIVEN.md` | порядок «входящие → спеки OpenSpec → код» |
 | `docs/WHY.md` | почему правила и задачи устроены так |
 | `docs/examples/tasks/` | устройство файла задачи и образцы: в работе, закрытая, черновик |
+| `docs/examples/project/` | образец проекта: источник, спеки, карта и реестр, которые проходят все приборы |
 | `docs/incoming/` | присланные документы как есть + `index.yaml` |
 | `openspec/` | требования в формате OpenSpec: `README.md` — формат, источники, глоссарий, решения, вопросы; `specs/<имя>/spec.md` — спеки |
 | `docs/tasks/` | копия задач GitHub; низ файла — заметки агента между сессиями |
@@ -38,6 +39,7 @@ claude            # и в чате: /bootstrap
 | `docs/decisions.md`, `docs/dev-plan.md` | почему так выбрали; как строим |
 | `tools/backlog.py` | GitHub Issues ↔ `docs/tasks/`: sync, review, resume, new, comment |
 | `tools/spec_check.py` | проверки входящих и спек сверх валидатора OpenSpec, с самопроверкой |
+| `tools/source_check.py` | сверка требований с источником в обе стороны: строки источника, карта, реестр, решения |
 | `tools/check.sh` | все проверки одним списком: запускают CI и хук перед `git commit` |
 | `tools/claude_hooks.py` | хуки Claude Code: занятость контекста, задача после сжатия, коммит ли это |
 | `tools/context_check.py` | гейт: пути в инструкциях существуют, в коде нет оговорок (`context_check.json`) |
