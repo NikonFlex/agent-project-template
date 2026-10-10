@@ -53,6 +53,12 @@ run "spec_check.py: docs/examples/project" python3 tools/spec_check.py docs/exam
 run "source_check.py --selftest" python3 tools/source_check.py --selftest
 run "source_check.py" python3 tools/source_check.py
 run "source_check.py: docs/examples/project" python3 tools/source_check.py docs/examples/project
+run "paths_check.py --selftest" python3 tools/paths_check.py --selftest
+run "paths_check.py" python3 tools/paths_check.py
+run "paths_check.py: docs/examples/project" python3 tools/paths_check.py docs/examples/project
+run "task_links.py --selftest" python3 tools/task_links.py --selftest
+run "task_links.py" python3 tools/task_links.py
+run "task_links.py: docs/examples/project" python3 tools/task_links.py docs/examples/project
 run "openspec validate --strict" openspec_validate .
 run "openspec validate --strict: docs/examples/project" openspec_validate docs/examples/project
 run "context_check.py" python3 tools/context_check.py

@@ -110,6 +110,11 @@ def requirements(text: str) -> list[tuple[str, str]]:
     return list(zip(parts[1::2], parts[2::2], strict=True))
 
 
+def addresses(specs: dict[str, str]) -> set[str]:
+    """Адреса всех требований: `<спека>: <заголовок>`."""
+    return {f"{name}: {title}" for name, text in specs.items() for title, _ in requirements(text)}
+
+
 def check_requirements(name: str, text: str) -> list[str]:
     """Заголовки не повторяются; строка источника — до первого сценария; в THEN нет оценок."""
     problems, seen = [], set()

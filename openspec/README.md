@@ -13,8 +13,9 @@
 в `openspec/specs/`. По этому адресу на требование ссылаются задачи, пути, сценарии, пункты
 ΔP и таблица статусов. Требования без строки источника не существует.
 
-Рядом лежат [source-map.md](source-map.md) — какой пункт источника за какой спекой — и
-[reverse-ledger.md](reverse-ledger.md) — строки источника, не ставшие требованиями.
+Рядом лежат [source-map.md](source-map.md) — какой пункт источника за какой спекой —,
+[reverse-ledger.md](reverse-ledger.md) — строки источника, не ставшие требованиями, — и
+[paths/](paths/README.md) — пользовательские пути со ссылками на требования.
 
 Форму проверяют `npx @fission-ai/openspec validate --specs --strict` и
 `python3 tools/spec_check.py`, связь с источником — `python3 tools/source_check.py` (все — в
