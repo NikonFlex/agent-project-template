@@ -58,3 +58,21 @@ def check_root(run: Callable[[Path], list[str]], clean: str) -> Callable[[Path],
         args = [a for a in sys.argv[1:] if not a.startswith("-")]
         return print_problems(run(Path(args[0]) if args else root), clean)
     return check
+
+
+def write_files(root: Path, files: dict[str, str]) -> Path:
+    """Проект для самопроверки: путь → текст."""
+    for path, text in files.items():
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_text(text, encoding="utf-8")
+    return root
+
+
+def replace_once(root: Path, change: tuple[str, str, str]) -> None:
+    """Порча для самопроверки: (файл, было, стало); «было» обязано найтись."""
+    path, old, new = change
+    file = root / path
+    text = file.read_text(encoding="utf-8")
+    if old not in text:
+        raise ValueError(f"selftest: в {path} нет «{old}» — порча не попадает")
+    file.write_text(text.replace(old, new, 1), encoding="utf-8")

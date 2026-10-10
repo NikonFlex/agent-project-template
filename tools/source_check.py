@@ -26,10 +26,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-from script_common import check_root, run_script, selftest_project
+from script_common import check_root, replace_once, run_script, selftest_project, write_files
 from spec_check import (
     INCOMING,
     SOURCE_LINE,
+    addresses,
     declared,
     requirements,
     section,
@@ -258,7 +259,7 @@ def check_items(project: Project) -> list[str]:
 # --------------------------------------------------------------------------- обратная сверка
 
 
-def check_ledger_row(row: list[str], project: Project, addresses: set[str]) -> str:
+def check_ledger_row(row: list[str], project: Project, known: set[str]) -> str:
     source, line, start, cls, basis = row[:5]
     lines = project.sources.get(source)
     if lines is None or not line.isdigit() or not 0 < int(line) <= len(lines):
@@ -267,7 +268,7 @@ def check_ledger_row(row: list[str], project: Project, addresses: set[str]) -> s
         return f"реестр: {source} стр. {line} — строка изменилась, запись снята: сверить заново"
     if cls not in CLASSES or not basis.strip():
         return f"реестр: {source} стр. {line} — класс не из {', '.join(CLASSES)} или нет основания"
-    if cls == "покрыто" and not any(f"`{a}`" in basis for a in addresses):
+    if cls == "покрыто" and not any(f"`{a}`" in basis for a in known):
         return f"реестр: {source} стр. {line} — «покрыто», но основание не называет требование"
     if cls == "вне объёма" and "README" not in basis:
         return f"реестр: {source} стр. {line} — «вне объёма», но основание не называет README"
@@ -276,10 +277,10 @@ def check_ledger_row(row: list[str], project: Project, addresses: set[str]) -> s
 
 def check_reverse(project: Project, named: set[tuple[str, int]]) -> list[str]:
     """Каждая непустая строка источника названа ссылкой, картой или реестром."""
-    addresses = {f"{n}: {t}" for n, text in project.specs.items() for t, _ in requirements(text)}
+    known = addresses(project.specs)
     problems = []
     for row in ledger_rows(project.root):
-        if problem := check_ledger_row(row, project, addresses):
+        if problem := check_ledger_row(row, project, known):
             problems.append(problem)
         elif row[1].isdigit():
             named.add((row[0], int(row[1])))
@@ -438,24 +439,14 @@ DEFECTS = {
 
 
 def make_project(root: Path) -> Path:
-    for path, text in FILES.items():
-        (root / path).parent.mkdir(parents=True, exist_ok=True)
-        (root / path).write_text(text, encoding="utf-8")
+    write_files(root, FILES)
     index = [{"path": p} for p in FILES if p.startswith(f"{INCOMING}/")]
     (root / INCOMING / "index.yaml").write_text(yaml.safe_dump(index, allow_unicode=True))
     return root
 
 
-def spoil(root: Path, path: str, old: str, new: str) -> None:
-    file = root / path
-    text = file.read_text(encoding="utf-8")
-    if old not in text:
-        raise ValueError(f"selftest: в {path} нет «{old}» — порча не попадает")
-    file.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-
 def selftest() -> int:
-    return selftest_project(make_project, run, DEFECTS, lambda root, change: spoil(root, *change))
+    return selftest_project(make_project, run, DEFECTS, replace_once)
 
 
 if __name__ == "__main__":
