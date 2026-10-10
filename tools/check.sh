@@ -34,7 +34,7 @@ pytest_or_none() {
 }
 
 # Строгий валидатор формы спек (openspec/README.md). Версия закреплена: обновлять осознанно,
-# прогнав образцы из docs/examples/openspec/. Корень OpenSpec ищется от папки запуска.
+# прогнав образец docs/examples/project/. Корень OpenSpec ищется от папки запуска.
 openspec_validate() {
     (cd "$1" && OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@1.14.1 \
         validate --specs --strict --no-interactive)
@@ -49,9 +49,12 @@ run "fpsr.py --selftest" python3 tools/fpsr.py --selftest
 run "context_check.py --selftest" python3 tools/context_check.py --selftest
 run "closing_words.py --selftest" python3 tools/closing_words.py --selftest
 run "spec_check.py" python3 tools/spec_check.py
-run "spec_check.py docs/examples" python3 tools/spec_check.py docs/examples
+run "spec_check.py: docs/examples/project" python3 tools/spec_check.py docs/examples/project
+run "source_check.py --selftest" python3 tools/source_check.py --selftest
+run "source_check.py" python3 tools/source_check.py
+run "source_check.py: docs/examples/project" python3 tools/source_check.py docs/examples/project
 run "openspec validate --strict" openspec_validate .
-run "openspec validate --strict: docs/examples" openspec_validate docs/examples
+run "openspec validate --strict: docs/examples/project" openspec_validate docs/examples/project
 run "context_check.py" python3 tools/context_check.py
 run "jscpd" npx -y jscpd@5.3.3 -c .jscpd.json .
 exit $failed
