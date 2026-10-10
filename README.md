@@ -17,7 +17,7 @@ claude            # и в чате: /bootstrap
 
 Нужны: `git`, `gh` (вошедший в аккаунт: `gh auth login`), `python3` с `pyyaml`
 (`pip install -r tools/requirements.txt`) — на нём написаны скрипты процесса, даже если
-проект на другом языке; `ruff`, `pytest` и `pytest-testmon` для Python-стека; `node` — для проверки копипасты.
+проект на другом языке; `ruff`, `pytest` и `pytest-testmon` для Python-стека; `node` — для проверки копипасты и валидатора спек OpenSpec.
 
 ## Что внутри
 
@@ -27,23 +27,22 @@ claude            # и в чате: /bootstrap
 | `.claude/rules/` | правила по темам, подгружаются при работе с файлами: код, спеки, задачи |
 | `.claude/settings.json` | `.env` не читается; закрытие и удаление задач, force-push — с подтверждения; хуки |
 | `.claude/hooks/task-reminder.sh` | перед каждым сообщением напоминает: сначала задача |
-| `.claude/skills/` | `/bootstrap` — первый заход, `/catchup` — где остановились, `/task` — задачи на диске, `/journal` — журнал и уроки, `/contradictions` — противоречия и дыры в контексте, `/fpsr` — доля задач с первого промпта и что мешает, `/spec-audit` — не пора ли сжать историю в спеках |
-| `docs/SPEC-DRIVEN.md` | порядок «входящие → спеки → дельты» |
+| `.claude/skills/` | `/bootstrap` — первый заход, `/catchup` — где остановились, `/task` — задачи на диске, `/journal` — журнал и уроки, `/contradictions` — противоречия и дыры в контексте, `/fpsr` — доля задач с первого промпта и что мешает |
+| `docs/SPEC-DRIVEN.md` | порядок «входящие → спеки OpenSpec → код» |
 | `docs/WHY.md` | почему правила и задачи устроены так |
 | `docs/examples/tasks/` | устройство файла задачи и образцы: в работе, закрытая, черновик |
 | `docs/incoming/` | присланные документы как есть + `index.yaml` |
-| `specs/` | единственный источник требований |
+| `openspec/` | требования в формате OpenSpec: `README.md` — формат, источники, глоссарий, решения, вопросы; `specs/<имя>/spec.md` — спеки |
 | `docs/tasks/` | копия задач GitHub; низ файла — заметки агента между сессиями |
 | `docs/journal/` | журнал эпизодов и уроки (`INSIGHTS.md` уже засеян) |
 | `docs/decisions.md`, `docs/dev-plan.md` | почему так выбрали; как строим |
 | `tools/backlog.py` | GitHub Issues ↔ `docs/tasks/`: sync, review, resume, new, comment |
-| `tools/spec_check.py` | проверки входящих и спек, с самопроверкой |
+| `tools/spec_check.py` | проверки входящих и спек сверх валидатора OpenSpec, с самопроверкой |
 | `tools/check.sh` | все проверки одним списком: запускают CI и хук перед `git commit` |
 | `tools/claude_hooks.py` | хуки Claude Code: занятость контекста, задача после сжатия, коммит ли это |
 | `tools/context_check.py` | гейт: пути в инструкциях существуют, в коде нет оговорок (`context_check.json`) |
 | `tools/fpsr.py` | FPSR — доля задач, закрытых с первого промпта, и PR на задачу |
 | `tools/closing_words.py` | close/fix/resolve рядом с номером задачи не пропускают хук и CI: закрывает хозяин |
-| `tools/spec_audit.py` | датчик: не пора ли сжать спеку; `--compare` — смысл после сжатия тот же (`spec_audit.json`) |
 | `tools/project_config.py`, `tools/script_common.py` | общее для скриптов: настройки задач, точка входа, отчёт |
 | `.claude/context.json` | размер окна и пороги, на которых Claude предлагает `/compact` или новый чат |
 | `.github/workflows/check.yml` | CI: ставит зависимости и запускает `tools/check.sh` |
@@ -52,7 +51,7 @@ claude            # и в чате: /bootstrap
 ## Как идёт работа
 
 ```
-документ от людей → docs/incoming/ (как есть) → дельта в specs/
+документ от людей → docs/incoming/ (как есть) → требование в openspec/specs/
 просьба хозяина → задача (docs/tasks/draft → backlog.py new) → ветка 12-имя → код по спеке
 находки по ходу → низ файла задачи; общее → docs/*.md; выбор → docs/decisions.md
 урок → /journal → INSIGHTS.md (читается перед нетривиальной работой)

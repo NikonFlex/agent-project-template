@@ -7,5 +7,5 @@
 #   status: incoming        # incoming → reviewed → distilled | rejected | superseded
 #   sha256: <sha256sum файла>
 #   distilled_into:
-#   - specs/<домен>.md
+#   - openspec/specs/<имя>/spec.md
 []
