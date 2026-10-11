@@ -3,7 +3,6 @@
   "minLines": 3,
   "minTokens": 30,
   "ignore": [
-    "**/tools/backlog.py",
     "**/*.md",
     "**/*.json",
     "**/*.yaml",

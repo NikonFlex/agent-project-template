@@ -18,14 +18,12 @@ PR на задачу — сколько PR понадобилось задаче
 
 from __future__ import annotations
 
-import json
 import re
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from backlog import MARK, load_tasks
+from backlog import MARK, load_config, load_tasks, rest
 from project_config import backlog_config
 from script_common import report, run_script
 
@@ -76,11 +74,21 @@ def pulls_by_task(pulls: list[dict], prefix: str) -> dict[int, list[dict]]:
     return out
 
 
-def fetch_pulls(root: Path) -> list[dict] | None:
-    fields = "number,title,body,headRefName,state,files"
-    done = subprocess.run(["gh", "pr", "list", "--state", "all", "--limit", "1000",  # noqa: S603, S607
-                           "--json", fields], cwd=root, capture_output=True, text=True)
-    return json.loads(done.stdout) if done.returncode == 0 else None
+def fetch_pulls(cfg: dict) -> list[dict] | None:
+    """PR репозитория по REST (`gh pr list` — GraphQL, из облачных сессий закрыт). Файлы
+    запрашиваются только у PR с задачей: их нужно отличить от PR учёта."""
+    try:
+        pulls = [{"number": p["number"], "title": p["title"], "body": p.get("body") or "",
+                  "headRefName": p["head"]["ref"],
+                  "state": "MERGED" if p.get("merged_at") else p["state"].upper()}
+                 for p in rest(f"repos/{cfg['repo']}/pulls", state="all", per_page="100")]
+        for pull in pulls:
+            if task_of(pull, cfg["prefix"] or "") is not None:
+                pull["files"] = [{"path": f["filename"]} for f in rest(
+                    f"repos/{cfg['repo']}/pulls/{pull['number']}/files", per_page="100")]
+    except SystemExit:
+        return None
+    return pulls
 
 
 def pulls_summary(by_task: dict[int, list[dict]], prefix: str) -> str:
@@ -132,10 +140,10 @@ def selftest() -> int:
 
 
 def show(root: Path) -> int:
-    cfg = backlog_config(root)
-    print(summary(verdicts(cfg["tasks"])))
-    pulls = fetch_pulls(root)
-    print("PR на задачу: нет данных — `gh pr list` не сработал" if pulls is None
+    print(summary(verdicts(backlog_config(root)["tasks"])))
+    cfg = load_config(root)
+    pulls = fetch_pulls(cfg)
+    print("PR на задачу: нет данных — `gh api` не сработал" if pulls is None
           else pulls_summary(pulls_by_task(pulls, cfg["prefix"] or ""), cfg["prefix"] or ""))
     return 0
 
