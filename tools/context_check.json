@@ -1,15 +1,35 @@
 {
-  "docs": ["CLAUDE.md", "README.md", ".claude/rules/*.md", ".claude/skills/*/SKILL.md",
-           "docs/*.md", "docs/examples/tasks/README.md", "docs/incoming/README.md",
-           "openspec/README.md"],
+  "docs": [
+    "CLAUDE.md",
+    "README.md",
+    ".claude/rules/*.md",
+    ".claude/skills/*/SKILL.md",
+    "docs/*.md",
+    "docs/examples/tasks/README.md",
+    "docs/incoming/README.md",
+    "openspec/README.md"
+  ],
   "skip_docs": [],
   "bases": [],
-  "ignore_patterns": ["^10\\.\\d{4,}/"],
+  "ignore_patterns": [
+    "^10\\.\\d{4,}/"
+  ],
   "ignore_paths": [
     "openspec/specs/accounts/spec.md",
     "docs/tasks/g-0012.md",
-    "docs/tasks/draft-bootstrap.md"
+    "docs/tasks/draft-bootstrap.md",
+    "docs/shared/acceptance"
   ],
-  "caveats": ["for now", "placeholder", "simplified", "not verified", "honest caveat",
-              "пока что", "временно", "упрощённо", "упрощенно", "не проверено"]
+  "caveats": [
+    "for now",
+    "placeholder",
+    "simplified",
+    "not verified",
+    "honest caveat",
+    "пока что",
+    "временно",
+    "упрощённо",
+    "упрощенно",
+    "не проверено"
+  ]
 }

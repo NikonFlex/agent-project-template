@@ -1,0 +1,4 @@
+#!/bin/sh
+# Проверки перед коммитом — те же, что в CI, из тестов только затронутые (check.sh --quick).
+# Работает для любого агента и для человека; раскладывает tools/install_hooks.sh.
+exec sh "$(git rev-parse --show-toplevel)/tools/check.sh" --quick

@@ -9,6 +9,7 @@
 ```
 gh repo create <имя> --private --template NikonFlex/agent-project-template --clone
 cd <имя>
+sh tools/install_hooks.sh   # git-хуки и `git ticket`; Claude Code делает это сам при старте
 claude            # и в чате: /bootstrap
 ```
 
@@ -27,7 +28,7 @@ claude            # и в чате: /bootstrap
 | `.claude/rules/` | правила по темам, подгружаются при работе с файлами: код, спеки, задачи |
 | `.claude/settings.json` | `.env` не читается; закрытие и удаление задач, force-push — с подтверждения; хуки |
 | `.claude/hooks/task-reminder.sh` | перед каждым сообщением напоминает: сначала задача |
-| `.claude/skills/` | `/bootstrap` — первый заход, `/catchup` — где остановились, `/task` — задачи на диске, `/journal` — журнал и уроки, `/contradictions` — противоречия и дыры в контексте, `/fpsr` — доля задач с первого промпта и что мешает |
+| `.claude/skills/` | `/bootstrap` — первый заход, `/catchup` — где остановились, `/task` — задачи на диске, `/journal` — журнал и уроки, `/contradictions` — противоречия и дыры в контексте, `/fpsr` — доля задач с первого промпта и что мешает, `/accept` — приёмка задач на рабочем контуре |
 | `docs/SPEC-DRIVEN.md` | порядок «входящие → спеки OpenSpec → код» |
 | `docs/WHY.md` | почему правила и задачи устроены так |
 | `docs/examples/tasks/` | устройство файла задачи и образцы: в работе, закрытая, черновик |
@@ -43,6 +44,7 @@ claude            # и в чате: /bootstrap
 | `tools/paths_check.py`, `tools/task_links.py` | пути ↔ требования; задачи ↔ требования |
 | `tools/scenario.py`, `tests/scenarios/` | раннер сценариев проверки: шаги через API, ожидания, контрольный сценарий, квитанция, запись прогона |
 | `tools/req_status.py`, `docs/shared/product/` | таблица требований со статусами; перенос статусов из записей прогона |
+| `tools/commit_check.py`, `templates/githooks/`, `tools/install_hooks.sh` | номер задачи в каждом коммите: `git ticket`, хук `commit-msg`, проверка ветки в CI; `pre-commit` — `check.sh --quick` |
 | `tools/check.sh` | все проверки одним списком: запускают CI и хук перед `git commit` |
 | `tools/claude_hooks.py` | хуки Claude Code: занятость контекста, задача после сжатия, коммит ли это |
 | `tools/context_check.py` | гейт: пути в инструкциях существуют, в коде нет оговорок (`context_check.json`) |

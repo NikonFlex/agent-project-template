@@ -48,6 +48,7 @@ run "claude_hooks.py --selftest" python3 tools/claude_hooks.py --selftest
 run "fpsr.py --selftest" python3 tools/fpsr.py --selftest
 run "context_check.py --selftest" python3 tools/context_check.py --selftest
 run "closing_words.py --selftest" python3 tools/closing_words.py --selftest
+run "commit_check.py --selftest" python3 tools/commit_check.py --selftest
 run "spec_check.py" python3 tools/spec_check.py
 run "spec_check.py: docs/examples/project" python3 tools/spec_check.py docs/examples/project
 run "source_check.py --selftest" python3 tools/source_check.py --selftest

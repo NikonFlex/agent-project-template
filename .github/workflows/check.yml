@@ -21,6 +21,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          # вся история: номер задачи проверяется во всех коммитах ветки от базы
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -37,6 +40,11 @@ jobs:
       - name: Проверки
         # Полный прогон: локально хук гоняет `check.sh --quick` — только затронутые тесты.
         run: sh tools/check.sh
+
+      - name: Номер задачи в каждом коммите
+        # Хук commit-msg обходится `--no-verify` — поэтому то же правило здесь.
+        if: github.event_name == 'pull_request'
+        run: python3 tools/commit_check.py range "origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}"
 
       - name: Слова, закрывающие задачу
         # Задачу закрывает только хозяин (CLAUDE.md, «Задачи»): close/fix/resolve рядом со
