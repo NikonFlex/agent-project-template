@@ -612,24 +612,31 @@ def cmd_new(cfg: dict, draft: str, labels: list[str], confirm: bool) -> int:
         print("\nНичего не заведено. Повторить с --confirm, когда владелец сказал «да».")
         return 1
 
-    number = create_issue(cfg, title, body, labels, milestone)
+    made = create_issue(cfg, title, body, labels, milestone)
+    number = made["number"]
     target = cfg["tasks"] / f"{cfg['prefix']}-{number:04d}.md"
-    target.write_text(ours if ours.endswith("\n") else ours + "\n", encoding="utf-8")
+    # Верх — из ответа POST: список задач REST отдаёт новую не сразу, и sync сразу после
+    # заведения оставлял файл без верха.
+    stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    ours = ours if ours.endswith("\n") else ours + "\n"
+    target.write_text(upper_half(cfg["prefix"], from_rest(made, []), {}, stamp) + ours,
+                      encoding="utf-8")
     path.unlink()
-    print(f"черновик → {target.name}; верх допишет sync:")
+    print(f"черновик → {target.name}; остальные задачи — sync:")
     code = cmd_sync(cfg, check=False)
     print(f"\nзаведена: {cfg['prefix']}#{number} «{title}» → milestone {milestone or '—'}")
     return code
 
 
-def create_issue(cfg: dict, title: str, body: str, labels: list[str], milestone: str | None) -> int:
+def create_issue(cfg: dict, title: str, body: str, labels: list[str],
+                 milestone: str | None) -> dict:
     payload: dict = {"title": title, "body": body, "labels": labels}
     if milestone:
         have = rest(f"repos/{cfg['repo']}/milestones", state="open", per_page="100")
         payload["milestone"] = next(m["number"] for m in have if m["title"] == milestone)
     made = post(f"repos/{cfg['repo']}/issues", payload)
     print(made["html_url"])
-    return int(made["number"])
+    return made
 
 
 def cmd_comment(cfg: dict, key: str, sections: list[str], confirm: bool) -> int:

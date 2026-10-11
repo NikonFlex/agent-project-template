@@ -139,3 +139,14 @@ OpenAI и Anthropic ловились своими правилами в инде
 читает историю через GraphQL GitHub (в облачной сессии закрыт — проверить нельзя), а PR,
 открытый токеном Actions, не запускает CI — `automerge` его не сольёт; semantic-release —
 Node и выпуск на каждое слияние, без кнопки.
+
+## 2026-10-11 — Dependabot обновляет Actions и pip, CI — на Node 24 (tpl#55)
+**Статус:** принято
+**Контекст:** CI предупреждал: `actions/checkout@v4` и `setup-python@v5` работают на устаревшем
+Node 20; закреплённые версии (git-cliff) иначе застывают.
+**Решение:** `checkout@v7` и `setup-python@v7` (`using: node24`, выпуски 17 и 19.07.2026
+[проверено: action.yml и `git log` меток v7]). `.github/dependabot.yml`: `github-actions` и
+`pip` в `tools/` раз в неделю, заголовки `build(deps): …`; `commit_check.py` пропускает их без
+номера задачи. Метки `automerge` у них нет — сливает человек.
+**Причина:** обновление приходит PR-ом с зелёным или красным CI, а не замечается случайно.
+**Альтернативы:** Renovate — гибче, но нужно ставить приложение GitHub; Dependabot встроен.

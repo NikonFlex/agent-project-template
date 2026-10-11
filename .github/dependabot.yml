@@ -1,0 +1,19 @@
+# Обновление версий PR-ами (docs/decisions.md, tpl#55). Заголовки — по Conventional Commits
+# (`build(deps): …`); номер задачи им не нужен — tools/commit_check.py пропускает их, как учёт.
+# PR Dependabot не получает метку automerge: обновление сливает человек, посмотрев CI.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope
+  - package-ecosystem: pip
+    directory: /tools
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope

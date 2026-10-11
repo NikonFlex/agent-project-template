@@ -12,7 +12,7 @@
 Задача хранится в git-каталоге клона (`.git/ticket`, у worktree — свой), в репозиторий не
 попадает. Обход хука `--no-verify` возможен, поэтому то же проверяет CI. Сообщения, которые
 пишет сам git (слияние, откат, fixup), не проверяются; коммиту учёта `chore(backlog): …`
-(копии задач, журнал) ссылка на задачу не нужна.
+(копии задач, журнал) и обновлению зависимостей `build(deps): …` ссылка на задачу не нужна.
 """
 
 from __future__ import annotations
@@ -32,7 +32,9 @@ TYPES = ("feat", "fix", "docs", "refactor", "perf", "test", "build", "ci", "chor
 HEADER = re.compile(rf"^(?:{'|'.join(TYPES)})(?:\([\w./-]+\))?!?: \S")
 #: Сообщения, которые пишет сам git, — без проверки формата и номера.
 GIT_MADE = ("Merge ", 'Revert "', "fixup! ", "squash! ", "amend! ")
-BOOKKEEPING = "chore(backlog): "
+#: Без номера задачи: учёт (копии задач, журнал) и обновления зависимостей от Dependabot
+#: (.github/dependabot.yml) — их заводит не задача.
+WITHOUT_TASK = ("chore(backlog): ", "build(deps): ", "build(deps-dev): ")
 ADVICE = "задача не названа: `git ticket <номер>` или «Implements <префикс>#N» в сообщении"
 FORMAT = (f"заголовок не по форме «<тип>[(область)][!]: <описание>»; типы: {', '.join(TYPES)} "
           "(docs/agents/tasks.md, «Коммит»)")
@@ -73,7 +75,7 @@ def fix_message(root: Path, message: str) -> tuple[str, str]:
     """Сообщение коммита → (сообщение, отказ). Ссылки нет — дописать из ticket или отказать."""
     if problem := header_problem(message):
         return message, problem
-    if message.startswith((*GIT_MADE, BOOKKEEPING)) or ref_pattern(root).search(message):
+    if message.startswith((*GIT_MADE, *WITHOUT_TASK)) or ref_pattern(root).search(message):
         return message, ""
     path = ticket_file(root)
     if not path.exists():
@@ -94,7 +96,7 @@ def cmd_msg(root: Path, file: str) -> int:
 def message_problems(root: Path, message: str) -> list[str]:
     """Что не так с сообщением уже сделанного коммита: формат и ссылка на задачу."""
     problems = [p for p in [header_problem(message)] if p]
-    exempt = message.startswith((*GIT_MADE, BOOKKEEPING))
+    exempt = message.startswith((*GIT_MADE, *WITHOUT_TASK))
     return problems + ([] if exempt or ref_pattern(root).search(message) else [ADVICE])
 
 
@@ -157,6 +159,7 @@ def hook_cases(root: Path) -> list[str]:
 def range_cases(root: Path, base: str) -> list[str]:
     commit(root, "feat: правка\n\nImplements ab#12")
     commit(root, "chore(backlog): копии задач")
+    commit(root, "build(deps): bump actions/checkout from 6 to 7")
     bad = [f"чистая ветка: {p}" for p in range_problems(root, f"{base}..HEAD")]
     commit(root, "fix: правка без номера")
     commit(root, "правка без типа\n\nImplements ab#12")
