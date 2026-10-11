@@ -37,6 +37,12 @@ jobs:
           pip install ruff pytest -r tools/requirements.txt
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+      - name: gitleaks
+        # Архив релиза, сверенный по контрольным суммам; версия — tools/secret_scan.py.
+        run: |
+          python3 tools/secret_scan.py install --binary
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Проверки
         # Полный прогон: локально хук гоняет `check.sh --quick` — только затронутые тесты.
         run: sh tools/check.sh
@@ -45,6 +51,11 @@ jobs:
         # Хук commit-msg обходится `--no-verify` — поэтому то же правило здесь.
         if: github.event_name == 'pull_request'
         run: python3 tools/commit_check.py range "origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}"
+
+      - name: Ключи в коммитах
+        # Хук pre-commit обходится `--no-verify` — поэтому то же по всем коммитам PR.
+        if: github.event_name == 'pull_request'
+        run: python3 tools/secret_scan.py range "origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}"
 
       - name: Слова, закрывающие задачу
         # Задачу закрывает только хозяин (AGENTS.md, «Задачи»): close/fix/resolve рядом со

@@ -3,9 +3,9 @@
     python3 tools/harness.py
 
 Печатает: разложены ли git-хуки и `git ticket`, подключены ли сторожа в Claude Code, Codex
-и Cursor, совпадают ли собранные правила; затем гоняет `--selftest` каждого прибора и
-сторожа. Код 1 — что-то из этого не так. Сетевые проверки (валидатор OpenSpec, jscpd) — в
-`sh tools/check.sh`.
+и Cursor, совпадают ли собранные правила, стоит ли gitleaks; затем гоняет `--selftest`
+каждого прибора и сторожа. Код 1 — что-то из этого не так. Сетевые проверки (валидатор
+OpenSpec, jscpd) — в `sh tools/check.sh`.
 """
 
 from __future__ import annotations
@@ -27,10 +27,11 @@ SELFTESTS = [
     "tools/backlog.py", "tools/spec_check.py", "tools/source_check.py", "tools/paths_check.py",
     "tools/task_links.py", "tools/scenario.py", "tools/req_status.py", "tools/commit_check.py",
     "tools/closing_words.py", "tools/claude_hooks.py", "tools/fpsr.py", "tools/context_check.py",
-    "tools/context_budget.py", "tools/agent_rules.py", ".agents/guards/guard.py",
+    "tools/context_budget.py", "tools/agent_rules.py", "tools/secret_scan.py",
+    ".agents/guards/guard.py",
 ]
-STATE_CHECKS = [["tools/agent_rules.py"], ["tools/context_budget.py"], ["tools/scenario.py",
-                                                                        "--control"]]
+STATE_CHECKS = [["tools/agent_rules.py"], ["tools/context_budget.py"],
+                ["tools/scenario.py", "--control"], ["tools/secret_scan.py", "version"]]
 
 
 def run(args: list[str]) -> tuple[bool, str]:
