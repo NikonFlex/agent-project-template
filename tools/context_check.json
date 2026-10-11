@@ -1,13 +1,17 @@
 {
   "docs": [
+    "AGENTS.md",
     "CLAUDE.md",
     "README.md",
-    ".claude/rules/*.md",
+    "docs/agents/*.md",
     ".claude/skills/*/SKILL.md",
     "docs/*.md",
     "docs/examples/tasks/README.md",
     "docs/incoming/README.md",
-    "openspec/README.md"
+    "openspec/README.md",
+    "openspec/*.md",
+    "openspec/paths/README.md",
+    "tests/scenarios/README.md"
   ],
   "skip_docs": [],
   "bases": [],
@@ -18,7 +22,8 @@
     "openspec/specs/accounts/spec.md",
     "docs/tasks/g-0012.md",
     "docs/tasks/draft-bootstrap.md",
-    "docs/shared/acceptance"
+    "docs/shared/acceptance",
+    "tests/scenarios/stand.json"
   ],
   "caveats": [
     "for now",

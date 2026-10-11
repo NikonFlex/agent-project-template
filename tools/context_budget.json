@@ -1,0 +1,8 @@
+{
+  "limits": {
+    "AGENTS.md": 130,
+    "CLAUDE.md": 50,
+    ".cursor/rules/agents.mdc": 15
+  },
+  "min_repeat": 60
+}

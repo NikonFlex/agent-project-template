@@ -1,0 +1,33 @@
+# Собрано из ASK в .agents/guards/guard.py — правится там:
+#   python3 .agents/guards/guard.py --write-codex-rules
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "запись в GitHub или push — только по «да» человека",
+)
+prefix_rule(
+    pattern = ["gh", "issue", ["create", "edit", "close", "reopen", "delete", "comment", "transfer"]],
+    decision = "prompt",
+    justification = "запись в GitHub или push — только по «да» человека",
+)
+prefix_rule(
+    pattern = ["gh", "pr", ["create", "edit", "close", "reopen", "merge", "comment", "review", "ready"]],
+    decision = "prompt",
+    justification = "запись в GitHub или push — только по «да» человека",
+)
+prefix_rule(
+    pattern = ["gh", "project"],
+    decision = "prompt",
+    justification = "запись в GitHub или push — только по «да» человека",
+)
+prefix_rule(
+    pattern = ["gh", "release", ["create", "edit", "delete", "upload"]],
+    decision = "prompt",
+    justification = "запись в GitHub или push — только по «да» человека",
+)
+prefix_rule(
+    pattern = ["gh", "api"],
+    decision = "prompt",
+    justification = "запись в GitHub или push — только по «да» человека",
+)

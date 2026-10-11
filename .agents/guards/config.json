@@ -1,0 +1,9 @@
+{
+  "prod": [
+    "\\bssh\\s+\\S*prod",
+    "ansible-playbook\\b.*(-l|--limit)\\s*prod",
+    "--contour[ =]prod"
+  ],
+  "secret_files": ["^\\.env(\\..+)?$", "\\.pem$", "^id_(rsa|ed25519)$"],
+  "secret_allow": [".env.example"]
+}
