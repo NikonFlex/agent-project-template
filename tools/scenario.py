@@ -28,8 +28,10 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
+
+from script_common import git_env
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS = Path("tests/scenarios")
@@ -40,7 +42,7 @@ RECEIPT_CONFIG = Path("tools/receipt.json")
 VAR = re.compile(r"\{(\w+)\}")
 
 
-class Mode(str, Enum):
+class Mode(StrEnum):
     """Режим обращений к языковой модели: стенд читает его из SCENARIO_MODE."""
 
     REPLAY = "replay"   # подставной провайдер отвечает кассетой; по умолчанию
@@ -286,7 +288,8 @@ def tree_hash(root: Path) -> str:
     """Хеш дерева кода: файлы git, кроме неисполняемого (tools/receipt.json, «exclude»)."""
     exclude = json.loads((root / RECEIPT_CONFIG).read_text(encoding="utf-8"))["exclude"]
     listed = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard"],  # noqa: S607
-                            cwd=root, capture_output=True, text=True, check=True).stdout.split("\n")
+                            cwd=root, capture_output=True, text=True, check=True,
+                            env=git_env()).stdout.split("\n")
     digest = hashlib.sha256()
     for path in sorted(p for p in listed if p and not any(fnmatch.fnmatch(p, x) for x in exclude)):
         file = root / path
@@ -311,7 +314,7 @@ def write_receipt(root: Path, mode: Mode, passed: bool) -> str:
 
 def head(root: Path) -> str:
     return subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True,  # noqa: S607
-                          text=True, check=False).stdout.strip()
+                          text=True, check=False, env=git_env()).stdout.strip()
 
 
 def record_run(root: Path, contour: str, results: list[dict]) -> Path:

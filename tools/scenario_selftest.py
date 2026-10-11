@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from scenario import CONTROL, RECEIPT_CONFIG, Mode, load, run_scenario, tree_hash, validate
-from script_common import ROOT, report
+from script_common import ROOT, git_env, report
 
 
 class Stub(BaseHTTPRequestHandler):
@@ -115,7 +115,7 @@ def receipt_hash() -> list[str]:
         (root / "app.py").write_text("x = 1\n")
         (root / "tests").mkdir()
         (root / "tests/test_app.py").write_text("assert True\n")
-        subprocess.run(["git", "init", "-q"], cwd=root, check=True)  # noqa: S607
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True, env=git_env())  # noqa: S607
         first = tree_hash(root)
         (root / "tests/test_app.py").write_text("assert 1\n")
         (root / "README.md").write_text("доки\n")

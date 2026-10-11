@@ -19,7 +19,7 @@ import json
 import re
 import sys
 import tempfile
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from script_common import replace_once, report, run_script, write_files
@@ -32,7 +32,7 @@ ADDRESS = re.compile(r"^`([\w-]+: [^`]+)`$")
 COLUMNS = ["Область", "Требование", "Статус", "Задача", "Исполнитель", "Проверено"]
 
 
-class Status(str, Enum):
+class Status(StrEnum):
     DONE = "✅"       # сделано и проверено на рабочем контуре
     PARTIAL = "🟡"    # частично, остаток записан
     SHIPPED = "🚚"    # код выложен, проверки на контуре ещё не было
