@@ -8,6 +8,9 @@
 
 Ссылка задачи: `openspec/specs/<спека>/spec.md` — «<заголовок>», «<заголовок>»; задача без
 требований говорит это строкой «без сценария — <причина>».
+
+Ещё сведения: открытая задача без строки «Локальный повтор» в низу файла
+(.claude/rules/tasks.md); её же требует сторож перед созданием PR.
 """
 
 from __future__ import annotations
@@ -25,6 +28,9 @@ LINK = re.compile(r"`openspec/specs/([\w-]+)/spec\.md` — ((?:«[^»]+»(?:, )?
 TITLE = re.compile(r"«([^»]+)»")
 NO_SCENARIO = re.compile(r"без сценария — \S", re.I)
 OPEN = re.compile(r"^\|\s*\*\*Состояние\*\*\s*\|\s*OPEN", re.M)
+#: Классификация до PR: как воспроизвели или почему повтор не нужен.
+LOCAL_REPEAT = re.compile(r"^Локальный повтор: (воспроизведён — (тест|контур|экран): \S"
+                          r"|(невозможен локально|не требуется|не бага) — \S)", re.M)
 SERVICE = {"INDEX.md", "REVIEW.md"}
 
 
@@ -34,6 +40,12 @@ def task_texts(root: Path) -> dict[str, str]:
     files = sorted(folder.glob("*.md")) if folder.is_dir() else []
     return {p.stem: p.read_text(encoding="utf-8").split(MARK, 1)[0]
             for p in files if p.name not in SERVICE}
+
+
+def has_local_repeat(task_file: Path) -> bool:
+    """В низу файла задачи есть строка «Локальный повтор» по форме."""
+    text = task_file.read_text(encoding="utf-8")
+    return MARK in text and bool(LOCAL_REPEAT.search(text.split(MARK, 1)[1]))
 
 
 def links(text: str) -> set[str]:
@@ -57,7 +69,12 @@ def collect(root: Path) -> tuple[list[str], list[str]]:
             unlinked.append(f"сведения: открытая задача {name} без требований и «без сценария»")
     orphans = [f"сведения: требование {a} не названо ни одной задачей"
                for a in sorted(known - named)]
-    return problems, unlinked + orphans
+    folder = backlog_config(root)["tasks"]
+    no_repeat = [f"сведения: открытая задача {name} без «Локальный повтор»"
+                 for name, text in task_texts(root).items()
+                 if is_open(name, text) and not name.startswith("draft-")
+                 and not has_local_repeat(folder / f"{name}.md")]
+    return problems, unlinked + orphans + no_repeat
 
 
 def run(root: Path) -> list[str]:
@@ -84,6 +101,8 @@ TASK = f"""# ab#1 — Вход
 {MARK}
 
 `openspec/specs/login/spec.md` — «Чужое из низа»
+
+Локальный повтор: воспроизведён — тест: tests/test_login.py::test_wrong_password
 """
 
 FILES = {
@@ -112,7 +131,8 @@ def selftest_notes() -> list[str]:
         replace_once(root, ("docs/tasks/ab-0002.md", "Без сценария — доступы.", "Доступы."))
         replace_once(root, (T1, ", «Выход»", ""))
         _, notes = collect(root)
-    wanted = ["открытая задача ab-0002", "требование login: Выход не названо"]
+    wanted = ["открытая задача ab-0002 без требований", "требование login: Выход не названо",
+              "открытая задача ab-0002 без «Локальный повтор»"]
     return [f"не поймано в сведениях: {w}" for w in wanted if not any(w in n for n in notes)]
 
 

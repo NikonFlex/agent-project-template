@@ -97,6 +97,7 @@ grep -rn '{{' --exclude-dir=.git --exclude-dir=skills --exclude-dir=tools .    #
 ruff check .                     # или линтер стека
 pytest                           # или тесты стека
 python3 tools/backlog.py --selftest
+sh tools/install_hooks.sh        # git-хуки pre-commit, commit-msg и `git ticket`
 sh tools/check.sh               # всё сразу: самопроверки, spec_check, openspec validate, jscpd
 ```
 

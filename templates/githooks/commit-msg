@@ -1,0 +1,4 @@
+#!/bin/sh
+# Номер задачи в сообщении коммита: нет ссылки — дописать из `git ticket` или остановить.
+# Раскладывает tools/install_hooks.sh; то же проверяет CI (tools/commit_check.py range).
+exec python3 "$(git rev-parse --show-toplevel)/tools/commit_check.py" --msg "$1"

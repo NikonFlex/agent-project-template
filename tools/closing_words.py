@@ -8,7 +8,7 @@
 
 GitHub закрывает задачу, когда PR или коммит, попавший в основную ветку, содержит close, fix
 или resolve в любой форме рядом со ссылкой на неё. Задачу закрывает только хозяин своим
-словом (CLAUDE.md, «Задачи»), поэтому ссылка пишется «Задача <префикс>#12», а не «Closes #12».
+словом (CLAUDE.md, «Задачи»), поэтому ссылка пишется «Implements <префикс>#12», а не «Closes #12».
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ KEYWORD = re.compile(rf"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+(?:{REF}
 START = r"(?:^|[;&|\n])\s*"
 WATCHED = re.compile(rf"{START}git(?:\s+-\S+(?:\s+[^\s-]\S*)?)*\s+commit\b"
                      rf"|{START}gh\s+pr\s+(?:create|edit|merge)\b")
-ADVICE = "задачу закрывает только хозяин; ссылка — «Задача <префикс>#12»"
+ADVICE = "задачу закрывает только хозяин; ссылка — «Implements <префикс>#12»"
 
 
 def found(text: str) -> list[str]:
@@ -58,7 +58,8 @@ def pr_problems(pr: dict) -> list[str]:
 
 CAUGHT = ["Closes #12", "fixes gf#7", "Resolved: owner/repo#3", "FIX #1",
           "close https://github.com/a/b/issues/5", "Задача сделана.\n\nCloses gf#96"]
-SPARED = ["Задача gf#12", "fix the bug in #12", "closed issue", "fixture #1", "prefix #3",
+SPARED = ["Implements gf#12", "Задача gf#12", "fix the bug in #12", "closed issue", "fixture #1",
+          "prefix #3",
           "Merge pull request #80 from NikonFlex/76-x"]
 
 
