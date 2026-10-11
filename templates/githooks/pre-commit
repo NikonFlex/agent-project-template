@@ -1,4 +1,7 @@
 #!/bin/sh
-# Проверки перед коммитом — те же, что в CI, из тестов только затронутые (check.sh --quick).
+# Перед коммитом: ключи в индексе (gitleaks, tools/secret_scan.py), затем проверки — те же,
+# что в CI, из тестов только затронутые (check.sh --quick).
 # Работает для любого агента и для человека; раскладывает tools/install_hooks.sh.
-exec sh "$(git rev-parse --show-toplevel)/tools/check.sh" --quick
+root="$(git rev-parse --show-toplevel)"
+python3 "$root/tools/secret_scan.py" staged || exit 1
+exec sh "$root/tools/check.sh" --quick

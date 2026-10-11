@@ -50,6 +50,7 @@ claude            # и в чате: /bootstrap
 | `tools/scenario.py`, `tests/scenarios/`, `tools/receipt.json` | раннер сценариев проверки: шаги через API, ожидания, контрольный сценарий, квитанция, запись прогона |
 | `tools/req_status.py`, `docs/shared/product/` | таблица требований со статусами; перенос статусов из записей прогона |
 | `tools/commit_check.py`, `templates/githooks/`, `tools/install_hooks.sh` | номер задачи в каждом коммите: `git ticket`, хук `commit-msg`, проверка ветки в CI; `pre-commit` — `check.sh --quick` |
+| `tools/secret_scan.py`, `.gitleaks.toml` | ключи в коммитах: gitleaks закреплённой версии в хуке `pre-commit` и по коммитам PR в CI; исключения — с причиной |
 | `tools/check.sh` | все проверки одним списком: запускают CI и хук перед `git commit` |
 | `tools/claude_hooks.py` | хуки Claude Code: занятость контекста, задача после сжатия, коммит ли это |
 | `tools/context_check.py` | гейт: пути в инструкциях существуют, в коде нет оговорок (`context_check.json`) |

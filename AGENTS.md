@@ -88,7 +88,8 @@ Cursor. Процедуры — в `docs/agents/` и `docs/shared/SDD.md`, поч
 | закрывающие слова | close, fix, resolve рядом с номером задачи |
 
 Git-хуки (`templates/githooks/`, `sh tools/install_hooks.sh` после клона): `pre-commit` —
-`check.sh --quick`, `commit-msg` — номер задачи. Состояние обвязки и все контрольные случаи
+ключи в индексе (gitleaks, `tools/secret_scan.py`) и `check.sh --quick`, `commit-msg` — форма
+и номер задачи; CI повторяет оба по коммитам PR. Состояние обвязки и все контрольные случаи
 без сети — `python3 tools/harness.py`.
 
 ## Ключи и деньги
