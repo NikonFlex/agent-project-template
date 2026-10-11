@@ -47,7 +47,7 @@ jobs:
         run: python3 tools/commit_check.py range "origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}"
 
       - name: Слова, закрывающие задачу
-        # Задачу закрывает только хозяин (CLAUDE.md, «Задачи»): close/fix/resolve рядом со
+        # Задачу закрывает только хозяин (AGENTS.md, «Задачи»): close/fix/resolve рядом со
         # ссылкой в заголовке, описании или коммитах PR закрыли бы её при слиянии.
         if: github.event_name == 'pull_request'
         env:

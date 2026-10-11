@@ -1,4 +1,11 @@
 {
-  "exclude": ["docs/**", "openspec/**", "tests/**", "*.md", ".claude/**", ".github/**"],
-  "gated": []
+  "exclude": [
+    "docs/**",
+    "openspec/**",
+    "tests/**",
+    "*.md",
+    ".claude/**",
+    ".github/**"
+  ],
+  "gated": false
 }

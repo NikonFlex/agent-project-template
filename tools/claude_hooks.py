@@ -2,17 +2,13 @@
 """Хуки Claude Code этого проекта (подключены в .claude/settings.json).
 
     python3 tools/claude_hooks.py after-compact   SessionStart, matcher compact
-    python3 tools/claude_hooks.py is-commit       PreToolUse Bash: JSON вызова на stdin
     python3 tools/claude_hooks.py context         UserPromptSubmit: JSON на stdin
     python3 tools/claude_hooks.py --selftest
 
 after-compact — после сжатия контекста напомнить, над какой задачей работали: номер — из
-имени ветки (`12-parser` → 12), из файла задачи — «Чем возобновлять» и «Что осталось».
+`git ticket`, без него — из имени ветки (`agent/12-parser` → 12), из файла задачи — «Чем
+возобновлять» и «Что осталось».
 Что хук печатает в stdout, Claude Code добавляет в контекст.
-
-is-commit — код 0, если команда Bash делает `git commit`, иначе 1. Фильтр `if` в
-settings.json приблизительный: на командах с `$VAR` и `$()` Claude Code запускает хук
-всегда, и без этой проверки красное дерево блокировало бы любую такую команду.
 
 context — сколько контекста занято: по `usage` последнего ответа основной сессии в журнале
 (`transcript_path`). Ниже первого порога молчит, выше — одна строка; что делать на каждом
@@ -28,21 +24,22 @@ import sys
 import tempfile
 from pathlib import Path
 
-from project_config import backlog_config
+from project_config import backlog_config, git_dir, ticket_number
 from script_common import report, run_script
 
 SECTIONS = ("Чем возобновлять", "Что осталось")
-# git, его ключи (`-C путь`, `--no-pager`), затем подкоманда commit: `git log --grep commit` — нет.
-GIT_COMMIT = re.compile(r"\bgit(?:\s+-\S+(?:\s+[^\s-]\S*)?)*\s+commit\b")
 
 
 def branch(root: Path) -> str:
-    """Имя ветки из HEAD; в worktree `.git` — файл со ссылкой на настоящий каталог."""
-    git = root / ".git"
-    if git.is_file():
-        git = Path(git.read_text(encoding="utf-8").split(":", 1)[1].strip())
-    head = (git / "HEAD").read_text(encoding="utf-8").strip()
+    """Имя ветки из HEAD."""
+    head = (git_dir(root) / "HEAD").read_text(encoding="utf-8").strip()
     return head.removeprefix("ref: refs/heads/") if head.startswith("ref:") else ""
+
+
+def current(root: Path) -> str:
+    """Задача из `git ticket` («#12»), иначе имя ветки."""
+    number = ticket_number(root)
+    return f"#{number}" if number is not None else branch(root)
 
 
 def section(text: str, name: str) -> str:
@@ -51,16 +48,16 @@ def section(text: str, name: str) -> str:
 
 
 def reminder(root: Path, current: str) -> str:
-    number = re.match(r"(\d+)-", current)
+    number = re.search(r"^#(\d+)$|(?:^|/)(\d+)-", current)
     if not number:
         return (f"Контекст сжат. Ветка «{current or '—'}» без номера задачи: спросить хозяина, "
                 "над чем работаем, или открыть docs/tasks/INDEX.md. Правила CLAUDE.md в силе.")
-    found = sorted(backlog_config(root)["tasks"].glob(f"*-{int(number.group(1)):04d}.md"))
+    found = sorted(backlog_config(root)["tasks"].glob(f"*-{int(number[1] or number[2]):04d}.md"))
     if not found:
         return f"Контекст сжат. Ветка {current}: файла задачи нет — `backlog.py sync`."
     text = found[0].read_text(encoding="utf-8")
     title = text.splitlines()[0].lstrip("# ").strip()
-    lines = [f"Контекст сжат. Работаем над {title} (ветка {current}, файл {found[0].name})."]
+    lines = [f"Контекст сжат. Работаем над {title} ({current}, файл {found[0].name})."]
     for name in SECTIONS:
         if body := section(text, name):
             lines += ["", f"{name}:", body]
@@ -113,10 +110,6 @@ def context_hook(root: Path, call: dict) -> str:
     return context_line(used, cfg)
 
 
-def is_commit(call: dict) -> bool:
-    return bool(GIT_COMMIT.search((call.get("tool_input") or {}).get("command") or ""))
-
-
 def selftest() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -130,14 +123,12 @@ def selftest() -> int:
             ("Запустить тесты." in text and "- хвост" in text, "нет нужных разделов"),
             ("всякое" not in text, "попал лишний раздел"),
             ("без номера" in reminder(root, "main"), "ветка без номера"),
+            ("ab#12 — Парсер" in reminder(root, "#12"), "задача из git ticket"),
+            ("ab#12 — Парсер" in reminder(root, "agent/12-parser"), "ветка agent/12-…"),
             ("файла задачи нет" in reminder(root, "99-x"), "нет файла задачи"),
         ] if not ok]
-    commits = ["git commit -m x", "git add a && git commit", "git -C /r commit -q"]
-    others = ["git log --grep commit", "echo ${PIPESTATUS[0]}", "git status", "git reset HEAD~1"]
-    bad += [f"is-commit ошибся на {c!r}" for c in commits if not is_commit(bash(c))]
-    bad += [f"is-commit ошибся на {c!r}" for c in others if is_commit(bash(c))]
     bad += check_context()
-    return report(bad, "after-compact: задача по ветке, разделы; is-commit: коммит и не коммит; "
+    return report(bad, "after-compact: задача по ticket и ветке, разделы; "
                        "context: токены основной сессии, пороги")
 
 
@@ -164,16 +155,10 @@ def check_context() -> list[str]:
     ] if not ok]
 
 
-def bash(command: str) -> dict:
-    return {"tool_name": "Bash", "tool_input": {"command": command}}
-
-
 def dispatch(root: Path) -> int:
     if sys.argv[1:] == ["after-compact"]:
-        print(reminder(root, branch(root)))
+        print(reminder(root, current(root)))
         return 0
-    if sys.argv[1:] == ["is-commit"]:
-        return 0 if is_commit(json.load(sys.stdin)) else 1
     if sys.argv[1:] == ["context"]:
         if line := context_hook(root, json.load(sys.stdin)):
             print(line)

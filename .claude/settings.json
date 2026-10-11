@@ -3,12 +3,6 @@
     "deny": [
       "Read(./.env)",
       "Read(./.env.*)"
-    ],
-    "ask": [
-      "Bash(gh issue close:*)",
-      "Bash(gh issue delete:*)",
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)"
     ]
   },
   "hooks": {
@@ -28,11 +22,11 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Read",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/closing_words.py\" --hook"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.agents/guards/guard.py\" claude"
           }
         ]
       }

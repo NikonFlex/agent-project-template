@@ -1,4 +1,4 @@
-"""Связь задач с требованиями по копии трекера в docs/tasks/ (.claude/rules/tasks.md).
+"""Связь задач с требованиями по копии трекера в docs/tasks/ (docs/agents/tasks.md).
 
 Запуск: python3 tools/task_links.py [корень]   корень — репозиторий или docs/examples/project
         python3 tools/task_links.py --selftest
@@ -10,7 +10,7 @@
 требований говорит это строкой «без сценария — <причина>».
 
 Ещё сведения: открытая задача без строки «Локальный повтор» в низу файла
-(.claude/rules/tasks.md); её же требует сторож перед созданием PR.
+(docs/agents/tasks.md); её же требует сторож перед созданием PR.
 """
 
 from __future__ import annotations
