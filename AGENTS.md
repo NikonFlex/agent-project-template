@@ -5,11 +5,11 @@
 Cursor. Стек — Python, {{фреймворк, где работает}}.
 
 Здесь — только то, что агенту нужно до первого действия; одинаково для Claude Code, Codex и
-Cursor. Процедуры — в `docs/agents/` и `docs/SPEC-DRIVEN.md`, почему правила такие — в
+Cursor. Процедуры — в `docs/agents/` и `docs/shared/SDD.md`, почему правила такие — в
 `docs/WHY.md`. Правило меняется PR с диффом; до слияния не действует.
 
 Требования — только из [openspec/specs/](openspec/README.md), а не из `docs/incoming/`.
-Порядок работы с требованиями — `docs/SPEC-DRIVEN.md`. Как строим — `docs/dev-plan.md`.
+Порядок работы с требованиями — `docs/shared/SDD.md`. Как строим — `docs/dev-plan.md`.
 База знаний — [docs/](docs/README.md).
 
 ## Схема — держать в голове всегда

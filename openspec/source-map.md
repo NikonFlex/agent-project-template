@@ -1,6 +1,6 @@
 # Карта источника
 
-Что из источников за какой спекой записано. Порядок — `docs/SPEC-DRIVEN.md`, проверка —
+Что из источников за какой спекой записано. Порядок — `docs/shared/SDD.md`, проверка —
 `tools/source_check.py`. Образец — [docs/examples/project/openspec/source-map.md](../docs/examples/project/openspec/source-map.md).
 
 ## Спеки
