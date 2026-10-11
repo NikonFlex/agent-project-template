@@ -11,7 +11,9 @@
 | [decisions.md](decisions.md) | Журнал решений: что выбрали, почему, что отбросили |
 | [shared/product/](shared/product/Таблица%20требований.md) | Таблица требований: статус каждого требования |
 | [incoming/](incoming/README.md) | Входящие документы как получены; не требования |
-| [SPEC-DRIVEN.md](SPEC-DRIVEN.md) | Порядок работы: входящие → спеки OpenSpec → код |
+| [shared/SDD.md](shared/SDD.md) | Процесс разработки от требований: роли, этапы, конвейер, ΔP, обратная связь, выкладка, метрики |
+| [shared/product/](shared/product/Журнал%20решений%20и%20ΔP.md) | Журнал решений и ΔP продакта |
+| [architecture/](architecture/README.md) | Проверенные факты о системе: когда и чем проверено |
 | [WHY.md](WHY.md) | Почему правила и задачи устроены так |
 | [examples/tasks/](examples/tasks/README.md) | Устройство файла задачи, команды `backlog.py`, образцы |
 | [journal/](journal/JOURNAL.md) | Журнал эпизодов и уроки ([INSIGHTS](journal/INSIGHTS.md)) |

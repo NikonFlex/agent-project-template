@@ -23,7 +23,8 @@
     "docs/tasks/g-0012.md",
     "docs/tasks/draft-bootstrap.md",
     "docs/shared/acceptance",
-    "tests/scenarios/stand.json"
+    "tests/scenarios/stand.json",
+    "repos"
   ],
   "caveats": [
     "for now",
