@@ -20,7 +20,8 @@
            тупики, ход работы. Скрипт его не меняет никогда.
 
 Наружу пишут только `new` и `comment`, и только с --confirm.
-Нужны Python 3.9+ и `gh` (GitHub CLI), вошедший в аккаунт: `gh auth login`.
+Нужны Python 3.12+ и `gh` (GitHub CLI), вошедший в аккаунт: `gh auth login`. К GitHub —
+только REST (`gh api`): GraphQL (`gh issue list`, `gh pr list`) из облачных сессий закрыт.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 MARK = "<!-- ↓↓↓ ниже наше: скрипт эту часть не трогает ↓↓↓ -->"
@@ -64,8 +65,6 @@ OPEN_ENDS = "Что осталось"
 #: Открытая задача без обновлений столько дней считается застрявшей.
 STALE_DAYS = 14
 
-FIELDS = ("number,title,state,labels,assignees,milestone,"
-          "createdAt,updatedAt,closedAt,author,body,comments,url")
 
 #: Скрипт кладёт чужой текст в репозиторий и отправляет наш наружу — значит,
 #: обязан останавливаться на похожем на пароль или ключ. Список неполный.
@@ -89,7 +88,7 @@ SECRET_PATTERNS = [
 
 def find_root() -> Path:
     """Корень git-репозитория, из которого запущен скрипт."""
-    out = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+    out = subprocess.run(["git", "rev-parse", "--show-toplevel"],  # noqa: S607
                          capture_output=True, text=True)
     if out.returncode != 0:
         sys.exit("запускать внутри git-репозитория")
@@ -97,29 +96,87 @@ def find_root() -> Path:
 
 
 def load_config(root: Path) -> dict:
-    """`.backlog.json` в корне необязателен: без него всё берётся из `gh`.
+    """`.backlog.json` в корне необязателен: без него репозиторий — из адреса origin.
 
     {"repo": "owner/name", "prefix": "g", "tasks_dir": "docs/tasks", "project": 3}
     """
     path = root / ".backlog.json"
     cfg = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     if not cfg.get("repo"):
-        cfg["repo"] = gh("repo", "view", "--json", "nameWithOwner",
-                         "--jq", ".nameWithOwner").strip()
+        cfg["repo"] = repo_from_remote(root)
     if not cfg.get("prefix"):
         cfg["prefix"] = re.sub(r"[^a-z]", "", cfg["repo"].split("/")[-1].lower())[:2] or "t"
     cfg["tasks"] = root / cfg.get("tasks_dir", "docs/tasks")
     return cfg
 
 
+def repo_from_remote(root: Path) -> str:
+    """owner/name из адреса origin: `gh repo view` ходит через GraphQL, а он не везде открыт."""
+    url = subprocess.run(["git", "remote", "get-url", "origin"], cwd=root,  # noqa: S607
+                         capture_output=True, text=True).stdout.strip()
+    m = re.search(r"([\w.-]+)/([\w.-]+?)(?:\.git)?/?$", url)
+    if not m:
+        sys.exit(f"не понял репозиторий из origin ({url!r}): впишите \"repo\" в .backlog.json")
+    return f"{m.group(1)}/{m.group(2)}"
+
+
 def gh(*args: str) -> str:
     try:
-        proc = subprocess.run(("gh",) + args, capture_output=True, text=True, timeout=180)
+        proc = subprocess.run(("gh", *args), capture_output=True, text=True,  # noqa: S603, S607
+                              timeout=180)
     except FileNotFoundError:
         sys.exit("нет `gh`. Поставить: https://cli.github.com, потом `gh auth login`")
     if proc.returncode != 0:
         sys.exit(f"gh {' '.join(args[:2])}: {proc.stderr.strip()}")
     return proc.stdout
+
+
+def json_values(raw: str) -> list:
+    """Вывод `gh api --paginate`: страницы идут подряд без разделителя — разобрать по очереди,
+    списки страниц склеить в один."""
+    decoder, out, pos = json.JSONDecoder(), [], 0
+    while raw[pos:].strip():
+        pos += len(raw[pos:]) - len(raw[pos:].lstrip())
+        value, pos = decoder.raw_decode(raw, pos)
+        out += value if isinstance(value, list) else [value]
+    return out
+
+
+def rest(path: str, **params: str) -> list:
+    """GET по REST со всеми страницами. Только REST: GraphQL (`gh issue list`, `gh pr list`,
+    `gh repo view`) из облачных сессий закрыт (403), а REST открыт везде."""
+    args = ["api", "--paginate", "-X", "GET", path]
+    for key, value in params.items():
+        args += ["-f", f"{key}={value}"]
+    return json_values(gh(*args))
+
+
+def from_rest(item: dict, comments: list[dict]) -> dict:
+    """Задача из REST → те же поля, что читают upper_half и index_page."""
+    closed = item.get("state") == "closed"
+    return {
+        "number": item["number"], "title": item["title"], "url": item.get("html_url"),
+        "state": "CLOSED" if closed else "OPEN",
+        "stateReason": (item.get("state_reason") or "") if closed else "",
+        "labels": item.get("labels") or [], "assignees": item.get("assignees") or [],
+        "milestone": item.get("milestone"), "author": item.get("user"),
+        "createdAt": item.get("created_at"), "updatedAt": item.get("updated_at"),
+        "closedAt": item.get("closed_at"), "body": item.get("body") or "",
+        "comments": [{"author": c.get("user"), "createdAt": c.get("created_at"),
+                      "body": c.get("body") or ""} for c in comments],
+    }
+
+
+def fetch_issues(repo: str) -> list[dict]:
+    """Все задачи с комментариями: два списка REST на весь репозиторий, без запроса на задачу.
+    PR в REST — тоже issues; они отбрасываются."""
+    comments: dict[int, list[dict]] = {}
+    for c in rest(f"repos/{repo}/issues/comments", per_page="100"):
+        number = int(c.get("issue_url", "").rsplit("/", 1)[-1] or 0)
+        comments.setdefault(number, []).append(c)
+    return [from_rest(i, sorted(comments.get(i["number"], []), key=lambda c: c["created_at"]))
+            for i in rest(f"repos/{repo}/issues", state="all", per_page="100")
+            if "pull_request" not in i]
 
 
 def scan_secrets(label: str, text: str) -> list[str]:
@@ -155,33 +212,6 @@ def has_ours(path: Path) -> bool:
     return path.exists() and squash(split_ours(path)) != squash(TEMPLATE)
 
 
-def fetch_state_reasons(repo: str) -> dict[int, str]:
-    """Причина закрытия по номеру задачи.
-
-    `gh issue list --json stateReason` появился в gh 2.50; на более старых
-    версиях он падает с «Unknown JSON field». REST-эндпоинт отдаёт
-    `state_reason` в любой версии, поэтому берём оттуда. Интересны только
-    закрытые: у открытых причины нет.
-    """
-    try:
-        raw = gh("api", "--paginate", "-X", "GET",
-                 f"repos/{repo}/issues", "-f", "state=closed", "-f", "per_page=100")
-    except SystemExit:
-        return {}
-    out: dict[int, str] = {}
-    for chunk in raw.strip().splitlines() or []:
-        if not chunk.strip():
-            continue
-        try:
-            items = json.loads(chunk)
-        except json.JSONDecodeError:
-            continue
-        for it in items if isinstance(items, list) else [items]:
-            if isinstance(it, dict) and it.get("number") is not None:
-                out[it["number"]] = it.get("state_reason") or ""
-    return out
-
-
 def dropped(issue: dict) -> bool:
     """Закрыта как «не будем делать»: её текст на диске читался бы как действующий."""
     return (issue.get("stateReason") or "").upper() == "NOT_PLANNED"
@@ -199,7 +229,7 @@ def when(value: str | None) -> str:
 
 def upper_half(prefix: str, issue: dict, card: dict, stamp: str) -> str:
     """Всё, что приходит из GitHub. Перезаписывается каждым sync."""
-    labels = ", ".join(l.get("name", "") for l in issue.get("labels") or []) or "—"
+    labels = ", ".join(lb.get("name", "") for lb in issue.get("labels") or []) or "—"
     assignees = ", ".join(who(a) for a in issue.get("assignees") or []) or "—"
     state = issue.get("state", "")
     if issue.get("stateReason"):
@@ -258,9 +288,9 @@ class Task:
         self.top = text if idx == -1 else text[:idx]
         self.ours = "" if idx == -1 else text[idx + len(MARK):]
         self.fields = {m["k"].strip(): m["v"].strip()
-                       for l in self.top.splitlines() if (m := self.FIELD.match(l))}
-        self.title = next((l[2:].strip() for l in self.top.splitlines()
-                           if l.startswith("# ")), self.name)
+                       for line in self.top.splitlines() if (m := self.FIELD.match(line))}
+        self.title = next((line[2:].strip() for line in self.top.splitlines()
+                           if line.startswith("# ")), self.name)
 
     is_draft = property(lambda self: self.name.startswith("draft-"))
     state = property(lambda self: self.fields.get("Состояние", ""))
@@ -316,8 +346,13 @@ def fetch_board(cfg: dict) -> dict[int, dict]:
     if not cfg.get("project"):
         return {}
     owner = cfg["repo"].split("/")[0]
-    raw = gh("project", "item-list", str(cfg["project"]), "--owner", owner,
-             "--limit", "1000", "--format", "json")
+    try:
+        raw = gh("project", "item-list", str(cfg["project"]), "--owner", owner,
+                 "--limit", "1000", "--format", "json")
+    except SystemExit as err:
+        # Доска (Projects v2) есть только в GraphQL; где он закрыт — колонка «—», sync идёт дальше.
+        print(f"доска недоступна, колонка «Доска» — «—»: {err}", file=sys.stderr)
+        return {}
     board = {}
     for item in json.loads(raw).get("items", []):
         c = item.get("content") or {}
@@ -348,39 +383,41 @@ def index_page(issues: list[dict], board: dict, cfg: dict, stamp: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def cmd_sync(cfg: dict, check: bool) -> int:
-    issues = json.loads(gh("issue", "list", "-R", cfg["repo"], "--state", "all",
-                           "--limit", "1000", "--json", FIELDS))
-    reasons = fetch_state_reasons(cfg["repo"])
-    for i in issues:
-        if reasons.get(i["number"]):
-            i["stateReason"] = reasons[i["number"]]
-    board = fetch_board(cfg)
-
+def issue_leaks(issues: list[dict]) -> list[str]:
     leaks = []
     for i in issues:
         leaks += scan_secrets(f"#{i['number']} описание", i.get("body") or "")
         for c in i.get("comments") or []:
             leaks += scan_secrets(f"#{i['number']} комментарий", c.get("body") or "")
-    if leaks:
+    return leaks
+
+
+def without_stamp(text: str) -> str:
+    """Строка со временем снимка меняется всегда — сравнивать файлы без неё."""
+    return "\n".join(line for line in text.splitlines() if not line.startswith("> Верх файла"))
+
+
+def cmd_sync(cfg: dict, check: bool) -> int:
+    issues = fetch_issues(cfg["repo"])
+    board = fetch_board(cfg)
+    if leaks := issue_leaks(issues):
         print("В задачах есть похожее на пароль или ключ — на диск не кладу:")
         for line in leaks[:20]:
             print("  " + line)
         print("Убрать из задачи на GitHub, сменить этот пароль или ключ, повторить sync.")
         return 2
 
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     cfg["tasks"].mkdir(parents=True, exist_ok=True)
     kept, changed, created = 0, [], []
     for issue in issues:
         path = cfg["tasks"] / f"{cfg['prefix']}-{issue['number']:04d}.md"
         if dropped(issue) and not path.exists():
             continue
-        new = upper_half(cfg["prefix"], issue, board.get(issue["number"], {}), stamp) + split_ours(path)
+        card = board.get(issue["number"], {})
+        new = upper_half(cfg["prefix"], issue, card, stamp) + split_ours(path)
         if path.exists():
-            # строка со временем снимка меняется всегда — сравниваем без неё
-            drop_stamp = lambda t: "\n".join(l for l in t.splitlines() if not l.startswith("> Верх файла"))
-            if drop_stamp(path.read_text(encoding="utf-8")) == drop_stamp(new):
+            if without_stamp(path.read_text(encoding="utf-8")) == without_stamp(new):
                 kept += 1
                 continue
             changed.append(path.name)
@@ -389,7 +426,8 @@ def cmd_sync(cfg: dict, check: bool) -> int:
         if not check:
             path.write_text(new, encoding="utf-8")
     if not check:
-        (cfg["tasks"] / "INDEX.md").write_text(index_page(issues, board, cfg, stamp), encoding="utf-8")
+        page = index_page(issues, board, cfg, stamp)
+        (cfg["tasks"] / "INDEX.md").write_text(page, encoding="utf-8")
 
     print(f"без изменений: {kept}, {'разошлось' if check else 'обновлено'}: {len(changed)}, "
           f"новых: {len(created)}")
@@ -405,10 +443,10 @@ def cmd_sync(cfg: dict, check: bool) -> int:
 
 def days_since(value: str) -> float | None:
     try:
-        t = datetime.strptime(value.strip()[:16], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+        t = datetime.strptime(value.strip()[:16], "%Y-%m-%d %H:%M").replace(tzinfo=UTC)
     except ValueError:
         return None
-    return (datetime.now(timezone.utc) - t).total_seconds() / 86400
+    return (datetime.now(UTC) - t).total_seconds() / 86400
 
 
 def collect_review(folder: Path, stale_days: int = STALE_DAYS) -> dict[str, list[Task]]:
@@ -439,7 +477,8 @@ def cmd_review(cfg: dict) -> int:
         if not items:
             return ["_пусто_", ""]
         rows = ["| Задача | Название |", "|---|---|"]
-        rows += [f"| [{t.name}]({t.name}.md) | {t.title.split('—', 1)[-1].strip()} |" for t in items]
+        rows += [f"| [{t.name}]({t.name}.md) | {t.title.split('—', 1)[-1].strip()} |"
+                 for t in items]
         return rows + ["", note, ""]
 
     ends: list[str] = []
@@ -448,11 +487,12 @@ def cmd_review(cfg: dict) -> int:
                  t.open_ends(), ""]
     page = [
         "# Обзор задач", "",
-        f"Снят {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC из файлов на диске, "
+        f"Снят {datetime.now(UTC):%Y-%m-%d %H:%M} UTC из файлов на диске, "
         "в сеть не ходит: свежесть — как у последнего sync.", "",
         f"## {OPEN_ENDS}", "", *(ends or ["_пусто_", ""]),
         "## Открыта, разбора нет", "",
-        *table(b["no_analysis"], "Низ пуст: если по задаче работали, найденное пропадёт вместе с сессией."),
+        *table(b["no_analysis"],
+               "Низ пуст: если по задаче работали, найденное пропадёт вместе с сессией."),
         "## Закрыта, а разбор живой", "",
         *table(b["closed_alive"], "Проверить: не отправить ли итог комментарием (`comment`)."),
         f"## Открыта и не двигалась {STALE_DAYS}+ дней", "",
@@ -460,7 +500,8 @@ def cmd_review(cfg: dict) -> int:
         "## Файлы без задачи в GitHub", "",
         *table(b["orphans"], "Нет поля «Ссылка»: задачу удалили, или файл сделан руками."),
         "## Черновики", "",
-        *table(b["drafts"], "Черновик — ещё не задача. Заводится `new … --confirm` после «да» владельца."),
+        *table(b["drafts"],
+               "Черновик — ещё не задача. Заводится `new … --confirm` после «да» владельца."),
     ]
     out = cfg["tasks"] / "REVIEW.md"
     out.write_text("\n".join(page) + "\n", encoding="utf-8")
@@ -506,7 +547,8 @@ def split_draft(path: Path) -> tuple[str, str, str]:
     text = path.read_text(encoding="utf-8")
     if MARK not in text and NEAR_MARK.search(text):
         sys.exit(f"{path}: метка не та. Скопировать посимвольно:\n{MARK}")
-    top, ours = (text.split(MARK, 1)[0], MARK + text.split(MARK, 1)[1]) if MARK in text else (text, TEMPLATE)
+    top, ours = ((text.split(MARK, 1)[0], MARK + text.split(MARK, 1)[1]) if MARK in text
+                 else (text, TEMPLATE))
     lines = top.strip().splitlines()
     if not lines or not lines[0].startswith("# ") or not lines[0][2:].strip():
         sys.exit(f"{path}: первая строка — заголовок «# Название задачи»")
@@ -530,19 +572,20 @@ def missing_milestone(repo: str, name: str | None) -> str:
     """Пусто, если milestone есть в GitHub (или не указан); иначе — что сказать."""
     if not name:
         return ""
-    have = gh("api", f"repos/{repo}/milestones?state=open&per_page=100", "--jq", ".[].title").split("\n")
+    have = [m["title"] for m in rest(f"repos/{repo}/milestones", state="open", per_page="100")]
     if name in have:
         return ""
     listed = ", ".join(h for h in have if h) or "нет ни одного"
-    return f"milestone «{name}» в {repo} нет (открытые: {listed}). Завести на GitHub или поправить черновик."
+    return (f"milestone «{name}» в {repo} нет (открытые: {listed}). "
+            "Завести на GitHub или поправить черновик.")
 
 
-def gh_with_body(args: list[str], body: str) -> str:
-    """Вызов gh с телом через файл: кавычки и переносы в тексте не ломают команду."""
-    with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8", delete=False) as fh:
-        fh.write(body)
+def post(path: str, payload: dict) -> dict:
+    """POST по REST, тело — JSON через файл: кавычки и переносы в тексте не ломают команду."""
+    with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as fh:
+        json.dump(payload, fh, ensure_ascii=False)
     try:
-        return gh(*args, "--body-file", fh.name)
+        return json.loads(gh("api", "-X", "POST", path, "--input", fh.name))
     finally:
         Path(fh.name).unlink(missing_ok=True)
 
@@ -555,9 +598,11 @@ def cmd_new(cfg: dict, draft: str, labels: list[str], confirm: bool) -> int:
     milestone, body = draft_milestone(body)
     leaks = scan_secrets("черновик", title + "\n" + body)
     if leaks:
-        print("В черновике похоже на пароль или ключ — наружу не отправляю:\n  " + "\n  ".join(leaks))
+        print("В черновике похоже на пароль или ключ — наружу не отправляю:\n  "
+              + "\n  ".join(leaks))
         return 2
-    print(f"репозиторий : {cfg['repo']}\nзаголовок   : {title}\nметки       : {', '.join(labels) or '—'}")
+    print(f"репозиторий : {cfg['repo']}\nзаголовок   : {title}\n"
+          f"метки       : {', '.join(labels) or '—'}")
     print(f"milestone   : {milestone or '—'}")
     print("--- тело ---\n" + body + "\n--- конец ---")
     if problem := missing_milestone(cfg["repo"], milestone):
@@ -578,17 +623,13 @@ def cmd_new(cfg: dict, draft: str, labels: list[str], confirm: bool) -> int:
 
 
 def create_issue(cfg: dict, title: str, body: str, labels: list[str], milestone: str | None) -> int:
-    args = ["issue", "create", "-R", cfg["repo"], "--title", title]
-    for lb in labels:
-        args += ["--label", lb]
+    payload: dict = {"title": title, "body": body, "labels": labels}
     if milestone:
-        args += ["--milestone", milestone]
-    out = gh_with_body(args, body)
-    m = re.search(r"/issues/(\d+)", out)
-    if not m:
-        sys.exit(f"не понял номер задачи из ответа gh: {out.strip()!r}")
-    print(out.strip())
-    return int(m.group(1))
+        have = rest(f"repos/{cfg['repo']}/milestones", state="open", per_page="100")
+        payload["milestone"] = next(m["number"] for m in have if m["title"] == milestone)
+    made = post(f"repos/{cfg['repo']}/issues", payload)
+    print(made["html_url"])
+    return int(made["number"])
 
 
 def cmd_comment(cfg: dict, key: str, sections: list[str], confirm: bool) -> int:
@@ -617,7 +658,7 @@ def cmd_comment(cfg: dict, key: str, sections: list[str], confirm: bool) -> int:
     if not confirm:
         print("\nНичего не отправлено. Повторить с --confirm, когда владелец сказал «да».")
         return 1
-    print(gh_with_body(["issue", "comment", m.group(1), "-R", cfg["repo"]], body).strip())
+    print(post(f"repos/{cfg['repo']}/issues/{m.group(1)}/comments", {"body": body})["html_url"])
     return 0
 
 
@@ -626,58 +667,82 @@ def cmd_comment(cfg: dict, key: str, sections: list[str], confirm: bool) -> int:
 # ---------------------------------------------------------------------------
 
 
-def selftest() -> int:
-    """Главное обещание — низ не теряется — проверяется на подставных данных."""
-    bad: list[str] = []
-    issue = {"number": 7, "title": "Прыжок", "state": "OPEN", "url": "https://github.com/u/g/issues/7",
-             "body": "Тело.\n\n" + MARK + "\n\nчужой низ", "updatedAt": "2020-01-01T00:00:00Z"}
-    with tempfile.TemporaryDirectory() as tmp:
-        d = Path(tmp)
-        p = d / "g-0007.md"
-        p.write_text(MARK + "\n\n## Что установлено\n\nНаш текст.\n", encoding="utf-8")
-        for _ in range(2):
-            p.write_text(upper_half("g", issue, {}, "тест") + split_ours(p), encoding="utf-8")
-        text = p.read_text(encoding="utf-8")
-        if text.count(MARK) != 1:
-            bad.append(f"после двух sync меток {text.count(MARK)}, а не одна")
-        if "Наш текст." not in text or "чужой низ" in text:
-            bad.append("низ потерян или в верх попал чужой низ")
+SAMPLE = {"number": 7, "title": "Прыжок", "state": "OPEN", "url": "https://github.com/u/g/issues/7",
+          "body": "Тело.\n\n" + MARK + "\n\nчужой низ", "updatedAt": "2020-01-01T00:00:00Z"}
 
-        gone = upper_half("g", {**issue, "state": "CLOSED", "stateReason": "NOT_PLANNED"}, {}, "т")
-        if "Тело." in gone:
-            bad.append("текст отменённой задачи попал на диск")
 
-        (d / "g-0008.md").write_text(upper_half("g", {**issue, "number": 8}, {}, "т") + TEMPLATE, encoding="utf-8")
-        (d / "draft-x.md").write_text("# Черновик\n\nтекст\n", encoding="utf-8")
-        r = collect_review(d)
-        if [t.name for t in r["no_analysis"]] != ["g-0008"] or [t.name for t in r["drafts"]] != ["draft-x"]:
-            bad.append("review разложил задачи не туда")
-        if [t.name for t in r["stale"]] != ["g-0007", "g-0008"]:
-            bad.append("review не заметил застрявшие")
-        for key in ("g-0007", "g-7", "g7", "7"):
-            if (f := find_task(d, key)) is None or f.name != "g-0007":
-                bad.append(f"resume не нашёл задачу по {key!r}")
+def selftest_sync(d: Path) -> list[str]:
+    """Низ переживает два sync, текст отменённой задачи на диск не попадает."""
+    bad = []
+    p = d / "g-0007.md"
+    p.write_text(MARK + "\n\n## Что установлено\n\nНаш текст.\n", encoding="utf-8")
+    for _ in range(2):
+        p.write_text(upper_half("g", SAMPLE, {}, "тест") + split_ours(p), encoding="utf-8")
+    text = p.read_text(encoding="utf-8")
+    if text.count(MARK) != 1:
+        bad.append(f"после двух sync меток {text.count(MARK)}, а не одна")
+    if "Наш текст." not in text or "чужой низ" in text:
+        bad.append("низ потерян или в верх попал чужой низ")
+    gone = upper_half("g", {**SAMPLE, "state": "CLOSED", "stateReason": "NOT_PLANNED"}, {}, "т")
+    if "Тело." in gone:
+        bad.append("текст отменённой задачи попал на диск")
+    page = index_page([{**SAMPLE, "milestone": {"title": "MVP"}}], {},
+                      {"prefix": "g", "tasks": d}, "т")
+    if "| MVP |" not in page:
+        bad.append("в INDEX нет колонки Milestone")
+    return bad
 
-        title, body, ours = split_draft(d / "draft-x.md")
-        if (title, body) != ("Черновик", "текст") or MARK not in ours:
-            bad.append("черновик без метки разобран неверно")
 
-        if draft_milestone("Milestone: MVP\n\nтекст") != ("MVP", "текст") \
-                or draft_milestone("текст\nMilestone: —\n") != (None, "текст") \
-                or draft_milestone("текст") != (None, "текст"):
-            bad.append("строка Milestone в черновике разобрана неверно")
-        page = index_page([{**issue, "milestone": {"title": "MVP"}}], {}, {"prefix": "g", "tasks": d}, "т")
-        if "| MVP |" not in page:
-            bad.append("в INDEX нет колонки Milestone")
+def selftest_review(d: Path) -> list[str]:
+    """review раскладывает задачи, resume находит по любому написанию номера."""
+    bad = []
+    (d / "g-0008.md").write_text(upper_half("g", {**SAMPLE, "number": 8}, {}, "т") + TEMPLATE,
+                                 encoding="utf-8")
+    (d / "draft-x.md").write_text("# Черновик\n\nтекст\n", encoding="utf-8")
+    r = collect_review(d)
+    if [t.name for t in r["no_analysis"]] != ["g-0008"] \
+            or [t.name for t in r["drafts"]] != ["draft-x"]:
+        bad.append("review разложил задачи не туда")
+    if [t.name for t in r["stale"]] != ["g-0007", "g-0008"]:
+        bad.append("review не заметил застрявшие")
+    for key in ("g-0007", "g-7", "g7", "7"):
+        if (f := find_task(d, key)) is None or f.name != "g-0007":
+            bad.append(f"resume не нашёл задачу по {key!r}")
+    title, body, ours = split_draft(d / "draft-x.md")
+    if (title, body) != ("Черновик", "текст") or MARK not in ours:
+        bad.append("черновик без метки разобран неверно")
+    return bad
 
+
+def selftest_parsing() -> list[str]:
+    """Строка Milestone черновика, страницы и задачи REST, сито секретов."""
+    bad = []
+    if draft_milestone("Milestone: MVP\n\nтекст") != ("MVP", "текст") \
+            or draft_milestone("текст\nMilestone: —\n") != (None, "текст") \
+            or draft_milestone("текст") != (None, "текст"):
+        bad.append("строка Milestone в черновике разобрана неверно")
+    if json_values('[{"n": 1}]\n[{"n": 2}][]  {"n": 3}') != [{"n": 1}, {"n": 2}, {"n": 3}]:
+        bad.append("страницы gh api --paginate склеены неверно")
+    item = {"number": 9, "title": "т", "state": "closed", "state_reason": "not_planned",
+            "user": {"login": "u"}, "created_at": "2020-01-02T03:04:05Z"}
+    issue = from_rest(item, [{"user": {"login": "v"}, "created_at": "2020", "body": "к"}])
+    if not dropped(issue) or issue["state"] != "CLOSED" \
+            or who(issue["author"]) != "u" or issue["comments"][0]["body"] != "к":
+        bad.append("задача из REST разобрана неверно")
     if not scan_secrets("x", "ghp_" + "a" * 36) or scan_secrets("x", "передать token в заголовке"):
         bad.append("сито секретов ошибается")
+    return bad
 
+
+def selftest() -> int:
+    """Главное обещание — низ не теряется — проверяется на подставных данных."""
+    with tempfile.TemporaryDirectory() as tmp:
+        bad = selftest_sync(Path(tmp)) + selftest_review(Path(tmp)) + selftest_parsing()
     for b in bad:
         print("✗ " + b)
     if not bad:
         print("самопроверка пройдена: низ переживает sync, review и resume работают, "
-              "Milestone из черновика и в INDEX, сито ловит ключи")
+              "Milestone из черновика и в INDEX, ответ REST разобран, сито ловит ключи")
     return 1 if bad else 0
 
 
@@ -685,7 +750,8 @@ def selftest() -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--selftest", action="store_true", help="проверка без сети")
     sub = ap.add_subparsers(dest="step")
     s = sub.add_parser("sync", help="GitHub → docs/tasks/")
