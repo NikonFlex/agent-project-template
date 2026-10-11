@@ -1,0 +1,16 @@
+{
+  "name": "assignment-default-mode",
+  "зачем": "Автор сохраняет назначение, не меняя задачу; режим назначения — «Научить».",
+  "требования": ["assignment: Режим по умолчанию"],
+  "steps": [
+    {"kind": "http", "method": "POST", "path": "/auth/login",
+     "body": {"email": "{author_email}", "password": "{author_password}"},
+     "expect_status": 200, "extract": {"token": "$.access_token"}},
+    {"kind": "http", "method": "POST", "path": "/assignments",
+     "headers": {"Authorization": "Bearer {token}"},
+     "body": {"employee": "anna@example.com"}, "expect_status": 201}
+  ],
+  "expect": [
+    {"kind": "field", "name": "режим «Научить»", "path": "$.mode", "expect": "Научить"}
+  ]
+}

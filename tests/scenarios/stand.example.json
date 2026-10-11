@@ -1,0 +1,6 @@
+{
+  "base_url": "http://localhost:18000",
+  "db": {"main": ["docker", "compose", "-p", "stand", "exec", "-T", "db", "psql", "-U", "app", "-tA", "-c", "{query}"]},
+  "compose": ["docker", "compose", "-p", "stand"],
+  "stub_url": "http://localhost:19100"
+}
