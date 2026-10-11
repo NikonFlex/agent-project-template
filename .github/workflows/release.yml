@@ -1,0 +1,57 @@
+name: release
+
+# Выпуск версии — по кнопке хозяина (Actions → release → Run workflow), не на каждое слияние:
+# что выпускать и когда — приказ человека (docs/shared/SDD.md, «Выпуск версии»).
+# Номер и CHANGELOG собирает git-cliff из заголовков коммитов (cliff.toml); что он соберёт,
+# видно заранее: python3 tools/changelog.py.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # вся история и метки: версия считается от последней метки vX.Y.Z
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: git-cliff
+        run: pip install -r tools/requirements.txt
+
+      - name: Версия и CHANGELOG
+        id: bump
+        run: |
+          version=$(git-cliff --bumped-version)
+          if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+            echo "::error::$version уже выпущена: с прошлого выпуска нет коммитов feat/fix/…"
+            exit 1
+          fi
+          git-cliff --bump -o CHANGELOG.md
+          git-cliff --bump --unreleased --strip all > notes.md
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Коммит, метка, выпуск
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "chore(release): $VERSION"
+          git tag "$VERSION"
+          git push origin "HEAD:${{ github.ref_name }}" "$VERSION"
+          gh release create "$VERSION" --title "$VERSION" --notes-file notes.md

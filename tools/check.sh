@@ -44,6 +44,7 @@ run "ruff" ruff check .
 run "pytest" pytest_or_none
 run "backlog.py --selftest" python3 tools/backlog.py --selftest
 run "secret_scan.py --selftest" python3 tools/secret_scan.py --selftest
+run "changelog.py --selftest" python3 tools/changelog.py --selftest
 run "spec_check.py --selftest" python3 tools/spec_check.py --selftest
 run "claude_hooks.py --selftest" python3 tools/claude_hooks.py --selftest
 run "fpsr.py --selftest" python3 tools/fpsr.py --selftest

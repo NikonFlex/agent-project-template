@@ -18,13 +18,12 @@
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 from project_config import backlog_config
-from script_common import ROOT, git_env, report
+from script_common import ROOT, output, report
 
 #: Типы заголовка — Conventional Commits и соглашение Angular. Объявлены один раз: хук, CI и
 #: подсказка читают отсюда.
@@ -47,9 +46,7 @@ def header_problem(message: str) -> str:
 
 
 def git(root: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=root, capture_output=True,  # noqa: S603, S607
-                          text=True, check=True, env=git_env())
-    return done.stdout.strip()
+    return output(root, "git", *args).strip()
 
 
 def ref_pattern(root: Path) -> re.Pattern:
