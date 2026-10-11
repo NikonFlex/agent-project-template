@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
 from collections.abc import Callable
@@ -83,3 +84,10 @@ def git_env() -> dict[str, str]:
     """Окружение для git без GIT_*: внутри git-хука GIT_DIR и GIT_INDEX_FILE указывают на
     репозиторий, который коммитят, и самопроверка во временном каталоге писала бы в него."""
     return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def output(cwd: Path, *args: str) -> str:
+    """Вывод команды без GIT_* в окружении; ненулевой код — исключение."""
+    done = subprocess.run(args, cwd=cwd, capture_output=True, text=True,  # noqa: S603
+                          check=True, env=git_env())
+    return done.stdout

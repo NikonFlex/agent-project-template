@@ -1,0 +1,53 @@
+# CHANGELOG и номер версии из заголовков Conventional Commits (git-cliff; выпуск —
+# .github/workflows/release.yml, порядок — docs/shared/SDD.md, «Выпуск версии»).
+# Учёт (`chore(backlog)`), выпуски и слияния в CHANGELOG не идут; подвал «Implements …» не
+# печатается — в журнал идёт только заголовок.
+
+[changelog]
+header = "# Изменения\n\nСобирает `git cliff` из заголовков коммитов (cliff.toml); руками не правится.\n"
+body = """
+{% if version %}\
+## {{ version | trim_start_matches(pat="v") }} — {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## Не выпущено
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+{% if commit.breaking %}**несовместимо:** {% endif %}\
+{{ commit.message | split(pat="\n") | first | trim }} ({{ commit.id | truncate(length=7, end="") }})\
+{% endfor %}
+{% endfor %}
+"""
+trim = false
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+# Порядок разделов — номер в комментарии <!-- n -->; несовместимое — отдельным разделом первым.
+commit_parsers = [
+  { message = "^chore\\(backlog\\)", skip = true },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^Merge ", skip = true },
+  { breaking = true, group = "<!-- 0 -->Несовместимые изменения" },
+  { message = "^feat", group = "<!-- 1 -->Новое" },
+  { message = "^fix", group = "<!-- 2 -->Исправлено" },
+  { message = "^perf", group = "<!-- 3 -->Быстрее" },
+  { message = "^refactor", group = "<!-- 4 -->Переделано" },
+  { message = "^docs", group = "<!-- 5 -->Документация" },
+  { message = "^(build|ci)", group = "<!-- 6 -->Сборка и CI" },
+  { message = "^(test|style|chore|revert)", group = "<!-- 7 -->Прочее" },
+  # тип не из списка (tools/commit_check.py, TYPES) — старые коммиты до формата
+  { message = ".*", skip = true },
+]
+protect_breaking_commits = true
+tag_pattern = "v[0-9]+\\.[0-9]+\\.[0-9]+"
+sort_commits = "oldest"
+
+[bump]
+# До 1.0.0 несовместимое поднимает минорную цифру, новое — патч (как semver для 0.x).
+breaking_always_bump_major = false
+features_always_bump_minor = false
+initial_tag = "v0.1.0"
