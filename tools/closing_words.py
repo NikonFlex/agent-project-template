@@ -62,8 +62,9 @@ def pr_problems(pr: dict) -> list[str]:
 
 CAUGHT = ["Closes #12", "fixes gf#7", "Resolved: owner/repo#3", "FIX #1",
           "close https://github.com/a/b/issues/5", "Задача сделана.\n\nCloses gf#96"]
-SPARED = ["Implements gf#12", "Задача gf#12", "fix the bug in #12", "closed issue", "fixture #1",
-          "prefix #3",
+SPARED = ["Implements gf#12", "Задача gf#12", "fix: пустая строка источника",
+          "fix(parser): разбор\n\nImplements gf#12", "fix the bug in #12", "closed issue",
+          "fixture #1", "prefix #3",
           "Merge pull request #80 from NikonFlex/76-x"]
 
 
