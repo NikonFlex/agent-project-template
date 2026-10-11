@@ -59,6 +59,11 @@ run "paths_check.py: docs/examples/project" python3 tools/paths_check.py docs/ex
 run "task_links.py --selftest" python3 tools/task_links.py --selftest
 run "task_links.py" python3 tools/task_links.py
 run "task_links.py: docs/examples/project" python3 tools/task_links.py docs/examples/project
+run "scenario.py --selftest" python3 tools/scenario.py --selftest
+run "scenario.py --control" python3 tools/scenario.py --control
+run "req_status.py --selftest" python3 tools/req_status.py --selftest
+run "req_status.py" python3 tools/req_status.py
+run "req_status.py: docs/examples/project" python3 tools/req_status.py docs/examples/project
 run "openspec validate --strict" openspec_validate .
 run "openspec validate --strict: docs/examples/project" openspec_validate docs/examples/project
 run "context_check.py" python3 tools/context_check.py

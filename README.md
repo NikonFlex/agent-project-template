@@ -41,6 +41,8 @@ claude            # и в чате: /bootstrap
 | `tools/spec_check.py` | проверки входящих и спек сверх валидатора OpenSpec, с самопроверкой |
 | `tools/source_check.py` | сверка требований с источником в обе стороны: строки источника, карта, реестр, решения |
 | `tools/paths_check.py`, `tools/task_links.py` | пути ↔ требования; задачи ↔ требования |
+| `tools/scenario.py`, `tests/scenarios/` | раннер сценариев проверки: шаги через API, ожидания, контрольный сценарий, квитанция, запись прогона |
+| `tools/req_status.py`, `docs/shared/product/` | таблица требований со статусами; перенос статусов из записей прогона |
 | `tools/check.sh` | все проверки одним списком: запускают CI и хук перед `git commit` |
 | `tools/claude_hooks.py` | хуки Claude Code: занятость контекста, задача после сжатия, коммит ли это |
 | `tools/context_check.py` | гейт: пути в инструкциях существуют, в коде нет оговорок (`context_check.json`) |

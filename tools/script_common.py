@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 from collections.abc import Callable
@@ -76,3 +77,9 @@ def replace_once(root: Path, change: tuple[str, str, str]) -> None:
     if old not in text:
         raise ValueError(f"selftest: в {path} нет «{old}» — порча не попадает")
     file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+def git_env() -> dict[str, str]:
+    """Окружение для git без GIT_*: внутри git-хука GIT_DIR и GIT_INDEX_FILE указывают на
+    репозиторий, который коммитят, и самопроверка во временном каталоге писала бы в него."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}

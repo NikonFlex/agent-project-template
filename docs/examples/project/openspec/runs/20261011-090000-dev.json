@@ -1,0 +1,9 @@
+{
+  "commits": {"backend": "4f2a9c1", "frontend": "b71e0d3"},
+  "contour": "dev",
+  "time": "2026-10-11T09:00:00+00:00",
+  "scenarios": [
+    {"name": "assignment-default-mode", "требования": ["assignment: Режим по умолчанию"],
+     "итог": "прошёл", "не сбылось": ""}
+  ]
+}
