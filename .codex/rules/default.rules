@@ -31,3 +31,8 @@ prefix_rule(
     decision = "prompt",
     justification = "запись в GitHub или push — только по «да» человека",
 )
+prefix_rule(
+    pattern = ["gh", "repo", ["edit", "delete", "rename", "archive", "unarchive"]],
+    decision = "prompt",
+    justification = "запись в GitHub или push — только по «да» человека",
+)

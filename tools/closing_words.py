@@ -18,6 +18,7 @@ import re
 import sys
 from pathlib import Path
 
+from commit_check import WITHOUT_TASK
 from script_common import print_problems, report, run_script
 
 # Ссылка на задачу: #12, gf#12, owner/repo#12 или адрес задачи на GitHub.
@@ -29,6 +30,10 @@ START = r"(?:^|[;&|\n])\s*"
 WATCHED = re.compile(rf"{START}git(?:\s+-\S+(?:\s+[^\s-]\S*)?)*\s+commit\b"
                      rf"|{START}gh\s+pr\s+(?:create|edit|merge)\b")
 ADVICE = "задачу закрывает только хозяин; ссылка — «Implements <префикс>#12»"
+# PR обновления зависимостей (Dependabot, `build(deps): …`): в теле — заметки к выпуску чужого
+# проекта с их «Fixes <ссылка>»; задачу этого репо они не называют — тело не смотрим, заголовок и
+# коммиты смотрим как у всех.
+DEPS = tuple(prefix for prefix in WITHOUT_TASK if prefix.startswith("build(deps"))
 
 
 def found(text: str) -> list[str]:
@@ -53,7 +58,9 @@ def hook(call: dict) -> int:
 
 
 def pr_problems(pr: dict) -> list[str]:
-    texts = {"заголовок": pr.get("title") or "", "описание": pr.get("body") or ""}
+    """Заголовок (при squash он становится заголовком коммита в main), описание и коммиты PR."""
+    title = pr.get("title") or ""
+    texts = {"заголовок": title, "описание": "" if title.startswith(DEPS) else pr.get("body") or ""}
     for c in pr.get("commits") or []:
         texts[f"коммит {c.get('oid', '')[:7]}"] = f"{c.get('messageHeadline', '')}\n" \
                                                   f"{c.get('messageBody', '')}"
@@ -61,7 +68,8 @@ def pr_problems(pr: dict) -> list[str]:
 
 
 CAUGHT = ["Closes #12", "fixes gf#7", "Resolved: owner/repo#3", "FIX #1",
-          "close https://github.com/a/b/issues/5", "Задача сделана.\n\nCloses gf#96"]
+          "close https://github.com/a/b/issues/5", "Задача сделана.\n\nCloses gf#96",
+          "fixes https://github.com/a/b/issues/5"]
 SPARED = ["Implements gf#12", "Задача gf#12", "fix: пустая строка источника",
           "fix(parser): разбор\n\nImplements gf#12", "fix the bug in #12", "closed issue",
           "fixture #1", "prefix #3",
@@ -84,6 +92,13 @@ def selftest() -> int:
           "commits": [{"oid": "abc1234def", "messageHeadline": "x", "messageBody": "closes #96"}]}
     if [p[:15] for p in pr_problems(pr)] != ["коммит abc1234:"]:
         bad.append(f"PR: {pr_problems(pr)}")
+    if [p[:9] for p in pr_problems({"title": "Fix #3 x", "body": "Задача gf#3"})] != ["заголовок"]:
+        bad.append("PR: слово закрытия в заголовке не поймано")
+    deps = {"title": "build(deps): Bump actions/upload-artifact from 4 to 7",
+            "body": "Release notes\n- Fixes https://github.com/a/b/issues/5"}
+    if pr_problems(deps) or not pr_problems({**deps, "title": "build: Bump x"}):
+        bad.append("PR обновления зависимостей: заметки к выпуску в теле — годятся, без префикса "
+                   "build(deps) — нет")
     return report(bad, f"поймано {len(CAUGHT)}, ложных нет из {len(SPARED)}, хук и PR — верно")
 
 

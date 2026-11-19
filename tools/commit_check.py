@@ -51,9 +51,11 @@ def git(root: Path, *args: str) -> str:
     return output(root, "git", *args).strip()
 
 
-def ref_pattern(root: Path) -> re.Pattern:
+def link_pattern(root: Path) -> re.Pattern:
+    """Ссылка на задачу — строка «Implements <префикс>#N»: номер в описании или теле («как в
+    ab#24») задачу коммита не называет, и раньше из-за него хук не дописывал ссылку."""
     prefix = backlog_config(root)["prefix"] or ""
-    return re.compile(rf"(?<![\w#]){re.escape(prefix)}#\d+")
+    return re.compile(rf"^Implements {re.escape(prefix)}#\d+\s*$", re.M)
 
 
 def ticket_file(root: Path) -> Path:
@@ -75,7 +77,7 @@ def fix_message(root: Path, message: str) -> tuple[str, str]:
     """Сообщение коммита → (сообщение, отказ). Ссылки нет — дописать из ticket или отказать."""
     if problem := header_problem(message):
         return message, problem
-    if message.startswith((*GIT_MADE, *WITHOUT_TASK)) or ref_pattern(root).search(message):
+    if message.startswith((*GIT_MADE, *WITHOUT_TASK)) or link_pattern(root).search(message):
         return message, ""
     path = ticket_file(root)
     if not path.exists():
@@ -97,7 +99,7 @@ def message_problems(root: Path, message: str) -> list[str]:
     """Что не так с сообщением уже сделанного коммита: формат и ссылка на задачу."""
     problems = [p for p in [header_problem(message)] if p]
     exempt = message.startswith((*GIT_MADE, *WITHOUT_TASK))
-    return problems + ([] if exempt or ref_pattern(root).search(message) else [ADVICE])
+    return problems + ([] if exempt or link_pattern(root).search(message) else [ADVICE])
 
 
 def range_problems(root: Path, span: str) -> list[str]:
@@ -153,6 +155,9 @@ def hook_cases(root: Path) -> list[str]:
         bad.append("сообщение со ссылкой изменено")
     if "Implements" in fix_message(root, "chore(backlog): учёт")[0]:
         bad.append("коммиту учёта дописан номер задачи")
+    fixed = fix_message(root, "fix: правка как в ab#24\n\nсм. ab#7\n")[0]
+    if not fixed.rstrip().endswith("Implements ab#12"):
+        bad.append(f"номер в тексте сошёл за ссылку, ticket не дописан: {fixed!r}")
     return bad
 
 
@@ -162,10 +167,12 @@ def range_cases(root: Path, base: str) -> list[str]:
     commit(root, "build(deps): bump actions/checkout from 6 to 7")
     bad = [f"чистая ветка: {p}" for p in range_problems(root, f"{base}..HEAD")]
     commit(root, "fix: правка без номера")
+    commit(root, "fix: номер только в тексте (ab#12)")
     commit(root, "правка без типа\n\nImplements ab#12")
     found = range_problems(root, f"{base}..HEAD")
-    if len(found) != 2 or ADVICE not in found[1] or FORMAT not in found[0]:
-        bad.append(f"коммит без номера и коммит без типа не пойманы: {found}")
+    advice = [ADVICE in problem for problem in found[1:]]
+    if len(found) != 3 or not all(advice) or FORMAT not in found[0]:
+        bad.append(f"коммит без ссылки и коммит без типа не пойманы: {found}")
     return bad
 
 
