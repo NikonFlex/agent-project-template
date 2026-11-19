@@ -13,7 +13,10 @@
     "openspec/paths/README.md",
     "tests/scenarios/README.md"
   ],
-  "skip_docs": [],
+  "skip_docs": [
+    "docs/clean-contour.md",
+    ".claude/skills/clean-contour-check/SKILL.md"
+  ],
   "bases": [],
   "ignore_patterns": [
     "^10\\.\\d{4,}/"

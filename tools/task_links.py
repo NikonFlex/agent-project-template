@@ -31,6 +31,8 @@ OPEN = re.compile(r"^\|\s*\*\*Состояние\*\*\s*\|\s*OPEN", re.M)
 #: Классификация до PR: как воспроизвели или почему повтор не нужен.
 LOCAL_REPEAT = re.compile(r"^Локальный повтор: (воспроизведён — (тест|контур|экран): \S"
                           r"|(невозможен локально|не требуется|не бага) — \S)", re.M)
+#: Проверка по своему диффу перед push (навык clean-contour-check): итог одной строкой.
+CLEAN_CONTOUR = re.compile(r"^Чистый контур: \S", re.M)
 SERVICE = {"INDEX.md", "REVIEW.md"}
 
 
@@ -46,6 +48,12 @@ def has_local_repeat(task_file: Path) -> bool:
     """В низу файла задачи есть строка «Локальный повтор» по форме."""
     text = task_file.read_text(encoding="utf-8")
     return MARK in text and bool(LOCAL_REPEAT.search(text.split(MARK, 1)[1]))
+
+
+def has_clean_contour(task_file: Path) -> bool:
+    """В низу файла задачи есть строка «Чистый контур: …»; её требует сторож перед push."""
+    text = task_file.read_text(encoding="utf-8")
+    return MARK in text and bool(CLEAN_CONTOUR.search(text.split(MARK, 1)[1]))
 
 
 def links(text: str) -> set[str]:

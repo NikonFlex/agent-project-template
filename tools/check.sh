@@ -1,15 +1,19 @@
 #!/bin/sh
 # Все проверки проекта одним списком. Запускают CI и хук перед `git commit`
-# (.claude/settings.json) — список живёт в одном месте. Другой стек — /bootstrap
+# (templates/githooks/pre-commit) — список живёт в одном месте. Другой стек — /bootstrap
 # меняет здесь линтер и тесты.
-#   sh tools/check.sh           полный прогон — CI
-#   sh tools/check.sh --quick   хук перед коммитом: из тестов только те, что затрагивает
+#   sh tools/check.sh           полный прогон: все тесты, и долгие (post-merge.yml после слияния)
+#   sh tools/check.sh --fast    CI на PR (`fast`): все тесты без долгих (метка slow, pytest.ini)
+#   sh tools/check.sh --quick   хук перед коммитом: из быстрых тестов только те, что затрагивает
 #                               изменённый код (pytest-testmon, база — .testmondata)
 # Код 0 — всё прошло, 1 — что-то упало; у упавших печатается хвост вывода.
 cd "$(dirname "$0")/.." || exit 1
 failed=0
-pytest_args=""
-[ "${1:-}" = "--quick" ] && pytest_args="--testmon"
+quick=""
+fast=""
+[ "${1:-}" = "--quick" ] && quick=1
+[ "${1:-}" = "--fast" ] && fast=1
+. tools/quick_scope.sh
 
 run() {
     name=$1
@@ -26,9 +30,18 @@ run() {
 # Код 5 у pytest — «тестов не найдено»: пока их нет (или testmon не нашёл затронутых), это
 # не ошибка. `python3 -m pytest`, а не `pytest`: в worktree команда `pytest` берёт
 # editable-пакет из другой папки. testmon следит за кодом на Python, а не за конфигами и
-# данными, — их ловит полный прогон в CI.
+# данными, — их ловит полный прогон в CI. `--testmon-forceselect`: с `-m` testmon сам отключает
+# отбор и гоняет все быстрые тесты — минуты на коммит вместо секунд.
 pytest_or_none() {
-    python3 -m pytest -q $pytest_args
+    if [ -n "$quick" ]; then
+        docs_only && return 0    # одни .md — тестам нечего проверять (tools/quick_scope.sh)
+        seed_testmon             # новое дерево — база testmon соседнего дерева, а не все тесты
+        python3 -m pytest -q --testmon --testmon-forceselect -m "not slow"
+    elif [ -n "$fast" ]; then
+        python3 -m pytest -q -m "not slow"
+    else
+        python3 -m pytest -q
+    fi
     code=$?
     [ "$code" -eq 0 ] || [ "$code" -eq 5 ]
 }
@@ -49,6 +62,8 @@ run "spec_check.py --selftest" python3 tools/spec_check.py --selftest
 run "claude_hooks.py --selftest" python3 tools/claude_hooks.py --selftest
 run "fpsr.py --selftest" python3 tools/fpsr.py --selftest
 run "context_check.py --selftest" python3 tools/context_check.py --selftest
+run "pr_link.py --selftest" python3 tools/pr_link.py --selftest
+run "post_merge.py --selftest" python3 tools/post_merge.py --selftest
 run "closing_words.py --selftest" python3 tools/closing_words.py --selftest
 run "commit_check.py --selftest" python3 tools/commit_check.py --selftest
 run "guard.py --selftest" python3 .agents/guards/guard.py --selftest

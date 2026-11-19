@@ -56,10 +56,14 @@ claude            # и в чате: /bootstrap
 | `tools/claude_hooks.py` | хуки Claude Code: занятость контекста, задача после сжатия, коммит ли это |
 | `tools/context_check.py` | гейт: пути в инструкциях существуют, в коде нет оговорок (`context_check.json`) |
 | `tools/fpsr.py` | FPSR — доля задач, закрытых с первого промпта, и PR на задачу |
-| `tools/closing_words.py` | close/fix/resolve рядом с номером задачи не пропускают хук и CI: закрывает хозяин |
+| `tools/closing_words.py` | close/fix/resolve у номера задачи в коммите и заголовке PR не пропускают хук и CI |
+| `tools/pr_link.py` | тело PR — строкой `Closes #N` (слияние закроет задачу) или `Part of #N`; сторож перед `gh pr create` и CI `pr-link` |
+| `tools/post_merge.py`, `.github/workflows/post-merge.yml` | полный набор тестов после слияния; новый красный переоткрывает задачи из `Closes` |
+| `tools/quick_scope.sh`, `tools/hook_lock.sh`, `pytest.ini` | хук перед коммитом: одни `.md` — без тестов, база testmon соседнего дерева, хуки деревьев по одному; метка `slow` — только после слияния |
+| `docs/clean-contour.md`, `.claude/skills/clean-contour-check/` | чистый контур: правила кода сущностей с жизненным циклом и проверка по диффу перед push (Apache 2.0, `docs/clean-contour.LICENSE`) |
 | `tools/project_config.py`, `tools/script_common.py` | общее для скриптов: настройки задач, точка входа, отчёт |
 | `.claude/context.json` | размер окна и пороги, на которых Claude предлагает `/compact` или новый чат |
-| `.github/workflows/check.yml` | CI: ставит зависимости и запускает `tools/check.sh` |
+| `.github/workflows/check.yml` | CI на PR: `fast` (`check.sh --fast`), `pr-link`, `automerge` — сливает, закрывает задачи из `Closes`, запускает `post-merge` |
 | `ruff.toml` | настройки линтера; `tools/backlog.py` исключён — готовый инструмент |
 
 ## Как идёт работа
@@ -68,7 +72,8 @@ claude            # и в чате: /bootstrap
 PRD или ΔP продакта → docs/incoming/ (как есть) + «Источники и старшинство»
   → требования в openspec/specs/ со строкой источника; сверка в обе стороны (source_check)
   → пути (openspec/paths/) → задача на требования → сценарий проверки до кода
-  → своё дерево + git ticket → код → PR «Implements» с automerge → CI сливает
+  → своё дерево + git ticket → код → чистый контур → PR «Closes» с automerge → CI сливает
+  → post-merge: полный набор, красный переоткрывает задачу
   → выкладка → прогон сценариев на контуре → таблица требований (req_status)
   → продакт проверяет путь → журнал решений → следующий ΔP
 находки по ходу → низ файла задачи; общее → docs/*.md; выбор → docs/decisions.md

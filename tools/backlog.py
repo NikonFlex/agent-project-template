@@ -212,9 +212,15 @@ def has_ours(path: Path) -> bool:
     return path.exists() and squash(split_ours(path)) != squash(TEMPLATE)
 
 
+def not_planned(reason: str | None) -> bool:
+    """Причина закрытия — «не будем делать». GitHub отдаёт её как `not_planned` (REST) и как
+    `NOT_PLANNED` (копия на диске): единственное место, где это решается."""
+    return (reason or "").upper() == "NOT_PLANNED"
+
+
 def dropped(issue: dict) -> bool:
     """Закрыта как «не будем делать»: её текст на диске читался бы как действующий."""
-    return (issue.get("stateReason") or "").upper() == "NOT_PLANNED"
+    return not_planned(issue.get("stateReason"))
 
 
 def who(user) -> str:
@@ -736,6 +742,9 @@ def selftest_parsing() -> list[str]:
     if not dropped(issue) or issue["state"] != "CLOSED" \
             or who(issue["author"]) != "u" or issue["comments"][0]["body"] != "к":
         bad.append("задача из REST разобрана неверно")
+    if not (not_planned("not_planned") and not_planned("NOT_PLANNED")) \
+            or not_planned("completed") or not_planned(None):
+        bad.append("not_planned: REST и копия на диске")
     if not scan_secrets("x", "ghp_" + "a" * 36) or scan_secrets("x", "передать token в заголовке"):
         bad.append("сито секретов ошибается")
     return bad
