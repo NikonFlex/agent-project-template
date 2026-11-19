@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>Контрольные случаи: чего не видит человек</title>
+<script src="/braille/agent.js"></script>
+<link rel="stylesheet" href="/base.css">
+<style>
+  p { margin: 0; }
+  .row { height: 36px; position: relative; }
+  .same { color: #fff; }
+  .same-oklch { color: oklch(0.935 0.016 240); background: oklch(0.935 0.016 240); }
+  .clear { opacity: 0; }
+  .cut { width: 50px; overflow: hidden; white-space: nowrap; }
+  .frame { height: 20px; overflow: hidden; }
+  .frame p { margin-top: 60px; }
+  .far { position: absolute; left: -5000px; }
+  .veil { position: absolute; left: 0; top: 0; width: 200px; height: 36px; background: rgba(0, 0, 0, 0.05); }
+</style>
+<body>
+<div class="row"><p class="same">Текст цвета фона</p></div>
+<div class="row"><p class="same-oklch">Текст цвета фона в oklch</p></div>
+<div class="row"><p class="clear">Прозрачный текст</p></div>
+<div class="row"><div class="cut">Длинная обрезанная строка про заказ</div></div>
+<div class="row"><div class="frame"><p>Текст за краем рамки</p></div></div>
+<div class="row"><button class="far">Кнопка за краем экрана</button></div>
+<div class="row">
+  <button data-testid="cases.covered">Закрытая кнопка</button>
+  <div class="veil" data-testid="cases.veil"></div>
+</div>
+<div class="row"><button aria-label="Закрыть окно">Сохранить заказ</button></div>
+<div class="row"><p>Нормальный текст</p><button data-testid="cases.fine">Нормальная кнопка</button></div>

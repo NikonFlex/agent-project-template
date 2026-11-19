@@ -1,0 +1,55 @@
+{
+  "viewports": {
+    "desktop": {"width": 1440, "height": 1000},
+    "phone": {"width": 390, "height": 844}
+  },
+  "allowed_hosts": ["localhost", "127.0.0.1"],
+  "files_dir": "tests/scenarios/files",
+  "timing_ms": {
+    "poll": 100,
+    "after_poll": 200,
+    "appear_testid": 15000,
+    "optional": 3000,
+    "disabled_grace": 5000,
+    "occlusion_grace": 1000,
+    "occlusion_poll": 250,
+    "api_fail_grace": 5000,
+    "screen_ready": 20000,
+    "document_load": 30000,
+    "click": 15000
+  },
+  "timing_s": {
+    "after_within": 20,
+    "expect": 20,
+    "wait_text": 60,
+    "requested_settle": 1.5
+  },
+  "session": {
+    "heartbeat_ms": 2000,
+    "idle_ms": 1800000,
+    "poll_ms": 150,
+    "stale_heartbeat_s": 15,
+    "start_timeout_s": 60,
+    "step_default_s": 300,
+    "step_slack_s": 120
+  },
+  "masks": {
+    "replacement": "***",
+    "field_names": "password|passwd|pass|token|secret|cookie|authorization|api[_-]?key|csrf",
+    "patterns": [
+      "eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]*",
+      "(?:Bearer|Basic)\\s+[A-Za-z0-9._~+/=-]{8,}",
+      "(?:token|secret|password|passwd|api[_-]?key|auth_token|access_token|refresh_token|authorization)[\"']?\\s*[:=]\\s*[\"']?[^\\s\"'&,;}]{4,}",
+      "(?=[A-Za-z0-9_]*\\d)(?=[A-Za-z0-9_]*[A-Za-z])[A-Za-z0-9_]{32,}"
+    ]
+  },
+  "limits": {
+    "text": 1500,
+    "line": 240,
+    "console": 20,
+    "pageerrors": 10,
+    "requests": 30,
+    "body": 200,
+    "query": 100
+  }
+}

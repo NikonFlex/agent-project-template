@@ -105,6 +105,17 @@ PR и задачи, которые сливает и закрывает CI, шл
 уходит по «отправь», адресату его пересылает хозяин. Файлы и сводки — в «Результаты»:
 `python3 tools/tg_send.py send-file --topic results --file <файл>`.
 
+### Экраны для агентов (braille)
+
+Объект `window.__agent` в странице: что на экране, чем она занята, что человек не увидит, какие
+запросы упали — JSON вместо снимков. Включается переменной `AGENT_API=1` на стенде; у
+пользователей и на проде объекта нет. Агент идёт по экрану шагами: `python3 -m braille start |
+step | look | close` (Playwright, только `localhost` и разрешённые хосты). Устройство —
+[braille/README.md](braille/README.md), правила для агентов —
+[docs/agents/screens.md](docs/agents/screens.md), настройки — `config/braille.json`. Своя копия
+идеи [agent-braille](https://github.com/blurman-ai/agent-braille) (Apache-2.0): что взято и
+изменено — `braille/NOTICE`.
+
 ## Как идёт работа
 
 ```

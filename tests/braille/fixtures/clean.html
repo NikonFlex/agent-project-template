@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>Страница без видимых изъянов</title>
+<script src="/braille/agent.js"></script>
+<link rel="stylesheet" href="/base.css">
+<style>
+  .calm { color: oklch(0.2 0.016 240); background: oklch(0.935 0.016 240); }
+  .quiet { color: #777; }
+  .frame { width: 300px; overflow: hidden; }
+</style>
+<body>
+<h2>Всё на месте</h2>
+<p class="calm">Тёмный текст на светлом фоне в oklch</p>
+<p class="quiet">Серый поясняющий текст</p>
+<div class="frame"><p>Короткая строка в рамке</p></div>
+<button aria-label="Сохранить заказ">Сохранить заказ</button>
+<button data-testid="clean.ok">Нормальная кнопка</button>

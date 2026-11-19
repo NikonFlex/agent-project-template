@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>Контрольная страница: проверки</title>
+<script src="/braille/agent.js"></script>
+<body>
+<main data-testid="screen.expect" data-state="ready">
+  <span data-fact="mode" data-fact-value="preview"></span>
+  <h1>Проверки</h1>
+  <p id="first">Первый</p>
+  <p id="second">Второй</p>
+  <button data-testid="expect.on">Включено</button>
+  <button data-testid="expect.off" disabled>Выключено</button>
+  <label for="note">Заметка</label> <input id="note" value="ЖБ-17">
+  <label for="empty">Пустое</label> <input id="empty">
+  <label><input type="checkbox" data-testid="expect.agree" checked> Согласен</label>
+  <div class="gone" style="display: none">Скрыто</div>
+  <div class="seen">Видно</div>
+  <button data-testid="expect.step" onclick="count()">Шаг</button>
+  <p id="steps">0</p>
+</main>
+<script>
+  function count() {
+    const out = document.getElementById("steps");
+    out.textContent = Number(out.textContent) + 1;
+  }
+</script>

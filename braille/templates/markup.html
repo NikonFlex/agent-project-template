@@ -1,0 +1,33 @@
+{# Разметка экранов для агентов и сценариев. Контракт адаптирован из agent-braille
+   (Apache-2.0, коммит 2a778d0, runtime/screenState.ts): корень экрана с состоянием, testid у
+   действий, факты о том, чего не видно на экране. Изменено: макросы Jinja вместо функций React.
+
+   Как пользоваться (в атрибутной позиции тега, макрос печатает готовые атрибуты):
+     <main {{ screen_root("orders", "empty" if not data.orders else "ready") }}>
+     <button {{ testid("orders", "show") }}>Показать</button>
+     <ul {{ fact("letters-without-stage", 3) }}>
+
+   screen_root — по одному на страницу. Состояние берут из данных, которые страница уже
+   получила, а не из таймера: loading — данные ещё грузит JS страницы (он ставит ready, empty
+   или error сам, и снимает aria-busy), ready — показано, empty — показывать нечего, error —
+   страница вместо данных показывает причину сбоя. Отказ действия поверх показанных данных
+   (сообщение под формой) экран не меняет.
+
+   testid — у каждого действия: кнопки, формы, ссылок-кнопок. Имя «<экран>.<действие>»: экран —
+   имя из screen_root, а у частей, что показаны на нескольких экранах (меню, полоса симуляции,
+   строка письма), — имя части. Повторяющиеся элементы (строки списка) несут один testid на все.
+
+   fact — только то, что решил код, а экран не говорит почему. Имя — следствие («письмо без
+   этапа»), а не режим («режим 2»). #}
+
+{% macro screen_root(name, state) -%}
+data-testid="screen.{{ name }}" data-state="{{ state }}"{% if state == "loading" %} aria-busy="true"{% endif %}
+{%- endmacro %}
+
+{% macro testid(screen, action) -%}
+data-testid="{{ screen }}.{{ action }}"
+{%- endmacro %}
+
+{% macro fact(name, value) -%}
+data-fact="{{ name }}" data-fact-value="{{ value }}"
+{%- endmacro %}
