@@ -25,7 +25,7 @@ from guard import (
     to_codex,
     to_cursor,
 )
-from script_common import git_env, report, write_files
+from script_common import git_env, output, report, write_files
 
 #: (вызов, ожидаемый ответ, кусок причины) — по запрещённому и безобидному входу на сторож.
 CASES = [
@@ -44,6 +44,21 @@ CASES = [
     (Call(command="cat .env.example"), Verdict.ALLOW, ""),
     (Call(command="git commit -m 'Closes #12'"), Verdict.DENY, "Closes #12"),
     (Call(command="git commit -m 'Implements ab#12'"), Verdict.ALLOW, ""),
+    # тело PR: Closes или Part of обязательны, другие слова закрытия — отказ (tools/pr_link.py)
+    (Call(command="gh pr create --title t --body 'Fixes #12'"), Verdict.DENY, "Closes #N"),
+    (Call(command="gh pr create --title t --body 'Closes #12\nfixes https://github.com/a/b/issues/5'"),
+     Verdict.DENY, "по этому слову"),
+    (Call(command="gh pr create --title 'Fix #12 x' --body 'Closes #12'"), Verdict.DENY,
+     "заголовке"),
+    (Call(command="gh pr create --fill"), Verdict.DENY, "--body-file"),
+    (Call(command="gh pr create;ls"), Verdict.DENY, "--body"),
+    (Call(command="gh pr create --title t --body-file нет.md"), Verdict.DENY, "не найден"),
+    (Call(command="gh pr create --title t --body-file body-ok.md"), Verdict.ASK, "gh pr create"),
+    (Call(command="gh pr create --title t --body-file body-bad.md"), Verdict.DENY, "Closes #N"),
+    (Call(command="gh pr create --title t --body-file -"), Verdict.ASK, "gh pr create"),
+    (Call(command="gh pr create --title t --body 'Part of #12'"), Verdict.ASK, "gh pr create"),
+    (Call(command="git commit -q -F - <<'EOF'\nci: x\n\nСторож отбивает gh pr create\nEOF"),
+     Verdict.ALLOW, ""),
 ]
 
 
@@ -56,11 +71,22 @@ def project(root: Path, repeat: bool, gated: bool) -> Path:
         "docs/tasks/ab-0012.md": f"# ab#12\n\n<!-- ↓↓↓ ниже наше: скрипт эту часть не трогает "
                                  f"↓↓↓ -->\n\n{bottom}",
         "app.py": "x = 1\n",
+        "body-ok.md": "Описание\n\nCloses #12\n",
+        "body-bad.md": "Описание\n\nFixes #12\n",
     }
     write_files(root, files)
     subprocess.run(["git", "init", "-q"], cwd=root, check=True, env=git_env())  # noqa: S607
+    commit(root, "основа")
+    # origin/main — база, от которой сторож push считает изменённое
+    output(root, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
     (root / ".git/ticket").write_text("ab#12\n")
     return root
+
+
+def commit(root: Path, message: str) -> None:
+    """Всё рабочее дерево — одним коммитом (самопроверке нужна история, а не автор)."""
+    output(root, "git", "add", "-A")
+    output(root, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", message)
 
 
 def cases(root: Path) -> list[str]:
@@ -74,7 +100,7 @@ def cases(root: Path) -> list[str]:
 
 def pr_and_push(tmp: Path) -> list[str]:
     bad = []
-    pr = Call(command="gh pr create --title x --body 'Implements ab#12'")
+    pr = Call(command="gh pr create --title x --body 'Closes #12'")
     if decide(pr, project(tmp / "no-repeat", repeat=False, gated=False))[0] != Verdict.DENY:
         bad.append("PR без «Локальный повтор» не остановлен")
     if decide(pr, project(tmp / "repeat", repeat=True, gated=False))[0] != Verdict.ASK:
@@ -97,24 +123,54 @@ def pr_and_push(tmp: Path) -> list[str]:
     return bad
 
 
+def clean_contour(tmp: Path) -> list[str]:
+    """Push ветки: только текст — проходит; код без строки «Чистый контур:» — стоп; со строкой —
+    проходит (до вопроса человеку); нет origin/main — стоп."""
+    root = project(tmp / "contour", repeat=True, gated=False)
+    push, bad = Call(command="git push"), []
+    (root / "docs/note.md").write_text("текст\n")
+    (root / "openspec").mkdir()
+    (root / "openspec/spec.txt").write_text("спека\n")
+    commit(root, "docs: текст")
+    if decide(push, root)[0] != Verdict.ASK:
+        bad.append("push одних docs/openspec/.md остановлен сторожем чистого контура")
+    (root / "app.py").write_text("x = 2\n")
+    commit(root, "feat: код")
+    verdict, why = decide(push, root)
+    if verdict != Verdict.DENY or "clean-contour-check" not in why:
+        bad.append(f"push с кодом без «Чистый контур:» не остановлен: {verdict} «{why}»")
+    task = root / "docs/tasks/ab-0012.md"
+    task.write_text(task.read_text() + "Чистый контур: чисто — дифф проверен\n")
+    if decide(push, root)[0] != Verdict.ASK:
+        bad.append("строка «Чистый контур:» в низу задачи не пропустила push")
+    task.write_text(task.read_text().replace("Чистый контур:", "Заметка о чистом контуре:")
+                    .replace("<!-- ↓", "Чистый контур: выше метки\n<!-- ↓", 1))
+    if decide(push, root)[0] != Verdict.DENY:
+        bad.append("строка «Чистый контур:» выше метки засчитана")
+    output(root, "git", "update-ref", "-d", "refs/remotes/origin/main")
+    if decide(push, root)[0] != Verdict.DENY:
+        bad.append("push без origin/main для сравнения пропущен")
+    return bad
+
+
 def command_folder(tmp: Path) -> list[str]:
-    """Сессия — в клоне без ticket, работа — в дереве задачи: PR и push смотрятся в папке
-    команды (`cd`, `git -C`, папка сессии из события), а не в папке сессии."""
+    """Сессия — в клоне без ticket, работа — в дереве задачи: PR, push и тело PR смотрятся
+    в папке команды (`cd`, `git -C`, папка сессии из события), а не в папке сессии."""
     session = project(tmp / "session", repeat=True, gated=False)
     (session / ".git/ticket").unlink()
-    tree = project(tmp / "tree", repeat=True, gated=True)
-    os.environ["STAND_STATE_DIR"] = str(tmp / "state-folder")
-    pr = "gh pr create --title t --body 'Implements ab#12'"
+    tree = project(tmp / "tree", repeat=True, gated=False)
+    pr = "gh pr create --title t --body-file body-ok.md"
     wanted = [
         (Call(command=pr), Verdict.DENY, "PR без задачи"),
         (Call(command=f"cd {tree} && {pr}"), Verdict.ASK, "gh pr create"),
         (Call(command=pr, cwd=str(tree)), Verdict.ASK, "gh pr create"),
         (Call(command=f"cd {tmp}/нет && {pr}"), Verdict.DENY, "PR без задачи"),
-        # гейт квитанции включён только в дереве: push оттуда без квитанции — отказ
-        (Call(command=f"cd {tree} && git push"), Verdict.DENY, "квитанции"),
-        (Call(command=f"git -C {tree} push"), Verdict.DENY, "квитанции"),
-        (Call(command="git push"), Verdict.ASK, "git push"),
     ]
+    (tree / "app.py").write_text("x = 2\n")
+    commit(tree, "feat: код")
+    wanted += [(Call(command=f"cd {tree} && git push"), Verdict.DENY, "clean-contour-check"),
+               (Call(command=f"git -C {tree} push"), Verdict.DENY, "clean-contour-check"),
+               (Call(command="git push"), Verdict.ASK, "git push")]
     return [f"{call}: {verdict} «{why}», ждали {verdict_wanted} «{reason}»"
             for call, verdict_wanted, reason in wanted
             for verdict, why in [decide(call, session)]
@@ -152,11 +208,12 @@ def selftest() -> int:
     state = os.environ.get("STAND_STATE_DIR")
     with tempfile.TemporaryDirectory() as tmp:
         root = project(Path(tmp) / "base", repeat=True, gated=False)
-        bad = cases(root) + pr_and_push(Path(tmp)) + command_folder(Path(tmp)) + formats()
+        bad = (cases(root) + pr_and_push(Path(tmp)) + clean_contour(Path(tmp))
+               + command_folder(Path(tmp)) + formats())
     if state is None:
         os.environ.pop("STAND_STATE_DIR", None)
     else:
         os.environ["STAND_STATE_DIR"] = state
     return report(bad, f"{len(CASES)} входов сторожей, PR без «Локального повтора», квитанция "
-                       "push, папка команды (cd, git -C, папка сессии), форматы Claude Code / "
-                       "Codex / Cursor, правила Codex")
+                       "push, push с кодом без «Чистого контура», папка команды (cd, git -C, папка "
+                       "сессии), форматы Claude Code / Codex / Cursor, правила Codex")

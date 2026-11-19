@@ -4,4 +4,12 @@
 # Работает для любого агента и для человека; раскладывает tools/install_hooks.sh.
 root="$(git rev-parse --show-toplevel)"
 python3 "$root/tools/secret_scan.py" staged || exit 1
-exec sh "$root/tools/check.sh" --quick
+# Коммит из одних .md тестов не гоняет (tools/quick_scope.sh) — и в очередь не встаёт: иначе
+# документ ждёт чужие прогоны тестов (09.11: 18 минут за двумя правками ядра).
+. "$root/tools/quick_scope.sh"
+if docs_only; then
+    sh "$root/tools/check.sh" --quick
+    exit $?
+fi
+# тяжёлое — по одному на машине (tools/hook_lock.sh): иначе хуки worktree душат друг друга
+sh "$root/tools/hook_lock.sh" sh "$root/tools/check.sh" --quick

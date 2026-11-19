@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -28,9 +29,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
-from closing_words import closing_hits  # noqa: E402 — tools/ добавлен в путь строкой выше
+from closing_words import closing_hits, found  # noqa: E402 — tools/ добавлен в путь строкой выше
+from pr_link import problem as body_problem  # noqa: E402
 from project_config import backlog_config, ticket_number  # noqa: E402
-from task_links import has_local_repeat  # noqa: E402
+from script_common import git_env  # noqa: E402
+from task_links import has_clean_contour, has_local_repeat  # noqa: E402
 
 CONFIG = Path(".agents/guards/config.json")
 CODEX_RULES = Path(".codex/rules/default.rules")
@@ -83,7 +86,7 @@ def commands(command: str) -> list[list[str]]:
 
 def placed(call: Call, root: Path) -> list[tuple[Path, list[str]]]:
     """Простые команды с папкой, где каждая выполнится. Сессия агента стоит в основном
-    клоне, а работа — в дереве задачи (`cd <дерево> && git push`): ticket и файл задачи
+    клоне, а работа — в дереве задачи (`cd <дерево> && git push`): ticket, файл задачи и дифф
     берутся оттуда. `cd` меняет папку следующих команд, `git -C` — своей; папки нет — `cd`
     не сработает, остаётся прежняя."""
     here, out = Path(call.cwd) if call.cwd else root, []
@@ -172,9 +175,9 @@ def secrets(call: Call, root: Path) -> tuple[Verdict, str]:
 
 def closing(call: Call, root: Path) -> tuple[Verdict, str]:
     hits = closing_hits(call.command)
-    return (Verdict.DENY, f"{', '.join(hits)} — GitHub закроет задачу при слиянии; задачу "
-                          "закрывает человек, ссылка — «Implements <префикс>#N»") \
-        if hits else (Verdict.ALLOW, "")
+    return (Verdict.DENY, f"{', '.join(hits)} в коммите — GitHub закроет задачу при попадании в "
+                          "main; в коммите — «Implements <префикс>#N», задачу закрывает строка "
+                          "`Closes #N` в теле PR") if hits else (Verdict.ALLOW, "")
 
 
 def creates_pr(command: str) -> bool:
@@ -185,6 +188,58 @@ def creates_pr(command: str) -> bool:
 def pushes(command: str) -> bool:
     """Есть ли в строке `git push` — одна проверка для сторожей push."""
     return any(matches(w, PUSH) for w in commands(command))
+
+
+def _flag(args: list[str], names: tuple[str, ...]) -> str | None:
+    for j, w in enumerate(args):
+        if w in names:
+            return args[j + 1] if j + 1 < len(args) else ""
+        for name in names:
+            if name.startswith("--") and w.startswith(name + "="):
+                return w.split("=", 1)[1]
+    return None
+
+
+def _body_of(args: list[str], root: Path) -> tuple[str | None, str | None]:
+    """Тело PR из `--body` или файла `--body-file`; (тело, причина отказа). `--body-file -`
+    (stdin) прочитать нельзя — тело None без отказа: поймает CI (job pr-link)."""
+    file = _flag(args, ("--body-file", "-F"))
+    if file is None:
+        return _flag(args, ("--body", "-b")), None
+    if file == "-":
+        return None, None
+    path = Path(file) if Path(file).is_absolute() else root / file
+    if not path.is_file():
+        return None, f"файл тела PR не найден: {file}"
+    return path.read_text(encoding="utf-8"), None
+
+
+def pr_link(call: Call, root: Path) -> tuple[Verdict, str]:
+    """Тело `gh pr create` — со строкой `Closes #N` или `Part of #N` и без других слов закрытия,
+    заголовок — без слов закрытия (tools/pr_link.py)."""
+    # только сама команда, а не те же слова в тексте коммита или заметки
+    if not creates_pr(call.command):
+        return Verdict.ALLOW, ""
+    parsed = lexed(call.command)
+    if parsed is None:
+        return Verdict.DENY, "не разобрал `gh pr create`; тело PR — через --body-file <файл>"
+    for args in (w[len(PR_CREATE):] for w in parsed if matches(w, PR_CREATE)):
+        if "--fill" in args:
+            return Verdict.DENY, "тело PR — явно, через --body-file: в нём Closes или Part of"
+        body, refusal = _body_of(args, where(call, root, PR_CREATE))
+        if refusal:
+            return Verdict.DENY, refusal
+        if body is None and _flag(args, ("--body-file", "-F")) == "-":
+            continue  # stdin не прочитать; CI поймает
+        if body is None:
+            return Verdict.DENY, "тело PR — через --body или --body-file: в нём строка Closes " \
+                                 "или Part of"
+        title_hits = found(_flag(args, ("--title", "-t")) or "")
+        reason = body_problem(body) or (f"«{title_hits[0]}» в заголовке PR — GitHub закроет "
+                                        "задачу при слиянии" if title_hits else None)
+        if reason:
+            return Verdict.DENY, reason
+    return Verdict.ALLOW, ""
 
 
 def ticket_task(root: Path) -> Path | None:
@@ -205,6 +260,39 @@ def local_repeat(call: Call, root: Path) -> tuple[Verdict, str]:
     if not has_local_repeat(task):
         return Verdict.DENY, (f"в {task.name} нет строки «Локальный повтор» — записать до PR "
                               "(docs/agents/tasks.md)")
+    return Verdict.ALLOW, ""
+
+
+#: Правка вне кода: текст, спеки и задачи. Остальное — код (чистый контур смотрит его).
+NOT_CODE = re.compile(r"\.md$|^(?:docs|openspec)/")
+
+
+def changed_files(root: Path) -> list[str] | None:
+    """Файлы ветки относительно `origin/main` (от общего предка); None — сравнить не вышло."""
+    run = subprocess.run(  # noqa: S603 — своя команда git, без оболочки
+        ["git", "-C", str(root), "-c", "core.quotePath=false", "diff", "--name-only",  # noqa: S607
+         "origin/main...HEAD"], capture_output=True, text=True, check=False, env=git_env())
+    return run.stdout.splitlines() if run.returncode == 0 else None
+
+
+def clean_contour(call: Call, root: Path) -> tuple[Verdict, str]:
+    """`git push` ветки с изменённым кодом — только со строкой «Чистый контур:» в низу задачи:
+    проверка по своему диффу, навык clean-contour-check (docs/agents/code.md)."""
+    if not pushes(call.command):
+        return Verdict.ALLOW, ""
+    root = where(call, root, PUSH)
+    files = changed_files(root)
+    if files is None:
+        return Verdict.DENY, "не удалось сравнить ветку с origin/main — `git fetch origin main`"
+    if all(NOT_CODE.search(f) for f in files):
+        return Verdict.ALLOW, ""
+    task = ticket_task(root)
+    if task is None:
+        return Verdict.DENY, "push без задачи: `git ticket <номер>` и файл задачи в docs/tasks/"
+    if not has_clean_contour(task):
+        return Verdict.DENY, (
+            "проверка чистого контура по своему диффу — навык clean-contour-check, "
+            f"строка «Чистый контур: …» в низу {task.name} (docs/agents/code.md)")
     return Verdict.ALLOW, ""
 
 
@@ -230,7 +318,7 @@ def receipt(call: Call, root: Path) -> tuple[Verdict, str]:
 
 #: Порядок не важен: итог — самый строгий ответ (отказ > вопрос > разрешение).
 GUARDS: list[Callable[[Call, Path], tuple[Verdict, str]]] = [
-    github_write, prod, secrets, closing, local_repeat, receipt]
+    github_write, prod, secrets, closing, pr_link, local_repeat, clean_contour, receipt]
 RANK = {Verdict.ALLOW: 0, Verdict.ASK: 1, Verdict.DENY: 2}
 
 

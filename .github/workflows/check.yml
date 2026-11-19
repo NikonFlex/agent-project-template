@@ -1,7 +1,10 @@
 name: check
 
+# Проверки PR: `fast` (быстрые тесты и самопроверки), `pr-link` (ссылка на задачу, слова
+# закрытия) и `automerge`. Полный набор тестов — после слияния (post-merge.yml). В приватном
+# репозитории на бесплатном тарифе защиты ветки и встроенного автослияния нет, поэтому
+# сливает job `automerge` токеном CI. Правка описания и метка гоняют всё: `fast` дешёвый.
 on:
-  push:
   pull_request:
     types: [opened, synchronize, reopened, edited, labeled]
 
@@ -10,13 +13,13 @@ permissions:
   pull-requests: read
 
 # PR, открытый сразу с меткой, даёт события opened и labeled — два прогона и два слияния.
-# Прогоны одного PR (и одной ветки при push) — в одну очередь, устаревший отменяется.
+# Прогоны одного PR — в одну очередь, устаревший отменяется.
 concurrency:
-  group: check-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: check-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  check:
+  fast:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -34,7 +37,7 @@ jobs:
       - name: Зависимости
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest -r tools/requirements.txt
+          pip install ruff pytest pytest-testmon -r tools/requirements.txt
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: gitleaks
@@ -44,23 +47,31 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Проверки
-        # Полный прогон: локально хук гоняет `check.sh --quick` — только затронутые тесты.
-        run: sh tools/check.sh
+        # Быстрые тесты и самопроверки; долгие (slow) — в полном наборе после слияния.
+        # Локально хук гоняет `check.sh --quick` — только затронутые тесты.
+        run: sh tools/check.sh --fast
 
       - name: Номер задачи в каждом коммите
         # Хук commit-msg обходится `--no-verify` — поэтому то же правило здесь.
-        if: github.event_name == 'pull_request'
         run: python3 tools/commit_check.py range "origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}"
 
       - name: Ключи в коммитах
         # Хук pre-commit обходится `--no-verify` — поэтому то же по всем коммитам PR.
-        if: github.event_name == 'pull_request'
         run: python3 tools/secret_scan.py range "origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}"
 
-      - name: Слова, закрывающие задачу
-        # Задачу закрывает только хозяин (AGENTS.md, «Задачи»): close/fix/resolve рядом со
-        # ссылкой в заголовке, описании или коммитах PR закрыли бы её при слиянии.
-        if: github.event_name == 'pull_request'
+  pr-link:
+    # Ссылка на задачу и слова закрытия: в теле PR — `Closes #N` или `Part of #N`
+    # (tools/pr_link.py), в заголовке и коммитах слов закрытия нет (tools/closing_words.py).
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Тело, заголовок и коммиты PR
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -69,12 +80,10 @@ jobs:
           python3 tools/closing_words.py --pr pr.json
 
   automerge:
-    # PR с меткой automerge сливается, когда полный прогон зелёный. Сливает сам CI: защита
-    # ветки с обязательной проверкой в приватном репозитории на бесплатном тарифе недоступна.
-    needs: check
+    # PR с меткой automerge сливается, когда `fast` и `pr-link` зелёные.
+    needs: [fast, pr-link]
     if: >-
-      github.event_name == 'pull_request'
-      && contains(github.event.pull_request.labels.*.name, 'automerge')
+      contains(github.event.pull_request.labels.*.name, 'automerge')
       && !github.event.pull_request.draft
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
@@ -82,8 +91,30 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/checkout@v7
+
       - name: Слить
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: gh pr merge ${{ github.event.pull_request.number }} --repo "${{ github.repository }}" --merge
+
+      # Слияние токеном CI не закрывает задачи из `Closes` (правило GitHub для
+      # GITHUB_TOKEN), поэтому закрываем их сами; красный полный набор их переоткроет.
+      - name: Закрыть задачи из Closes
+        # `set -o pipefail`: у Actions шаг идёт под `bash -e` без него — сбой `gh pr view` прошёл бы молча.
+        run: |
+          set -o pipefail
+          gh pr view ${{ github.event.pull_request.number }} --repo "${{ github.repository }}" --json body -q .body \
+            | python3 tools/pr_link.py closes "${{ github.repository }}" \
+            | tee closed.txt \
+            | while read -r ref; do
+                gh issue close "${ref##*#}" --repo "${ref%#*}" --reason completed
+              done
+
+      # Слияние токеном CI не порождает запуск workflow на push в main (правило GitHub для
+      # GITHUB_TOKEN; исключение — workflow_dispatch), поэтому полный набор запускается явно.
+      - name: Полный набор после слияния
+        run: gh workflow run post-merge.yml --repo "${{ github.repository }}" --ref main
