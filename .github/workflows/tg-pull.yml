@@ -1,0 +1,60 @@
+name: tg-pull
+
+# Сбор переписки из темы «Входящие» в буфер — ветку tg-inbox (tools/tg_inbox.py).
+# Расписание — страховка: Telegram хранит необработанные апдейты не дольше 24 часов; раз в 4 часа
+# хватает с запасом, а каждый запуск в приватном репо — минута из бесплатных.
+# /inbox запускает этот же workflow вручную, чтобы буфер писал только он.
+on:
+  schedule:
+    - cron: "17 */4 * * *"
+  workflow_dispatch:
+
+# два сбора подряд не должны писать буфер одновременно
+concurrency:
+  group: tg-pull
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      # первый сбор: ветки буфера ещё нет — пустая ветка без истории main
+      - name: Буфер — ветка tg-inbox
+        run: |
+          if git ls-remote --exit-code --heads origin tg-inbox >/dev/null; then
+            git clone -q --branch tg-inbox --single-branch \
+              "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" inbox
+          else
+            git init -q -b tg-inbox inbox
+            git -C inbox remote add origin \
+              "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          fi
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Забрать новое
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_OWNER_ID: ${{ secrets.TELEGRAM_OWNER_ID }}
+          TELEGRAM_THREAD_INBOX: ${{ secrets.TELEGRAM_THREAD_INBOX }}
+        run: python3 tools/tg_inbox.py pull --buffer inbox
+
+      - name: Записать буфер
+        working-directory: inbox
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || {
+            git commit -q -m "сбор $(date -u '+%Y-%m-%d %H:%M') UTC"
+            git push -q origin tg-inbox
+          }

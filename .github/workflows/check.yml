@@ -118,3 +118,24 @@ jobs:
       # GITHUB_TOKEN; исключение — workflow_dispatch), поэтому полный набор запускается явно.
       - name: Полный набор после слияния
         run: gh workflow run post-merge.yml --repo "${{ github.repository }}" --ref main
+
+      # «Слит» и «Закрыта» токеном CI tg-notify.yml не видит (события токена CI другие workflow не
+      # запускают) — пишем отсюда. Сбой отправки прогон не красит.
+      - name: Telegram — PR слит, задачи закрыты
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_THREAD_TASKS: ${{ secrets.TELEGRAM_THREAD_TASKS }}
+        run: |
+          send() { [ -s "$1" ] && python3 tools/tg_send.py send --topic tasks --file "$1"; }
+          python3 -c 'import json, os, sys; e = json.load(open(os.environ["GITHUB_EVENT_PATH"])); e["action"] = "closed"; e["pull_request"]["merged"] = True; json.dump(e, sys.stdout)' > merged.json
+          python3 tools/tg_notify.py --event pull_request --payload merged.json > message.txt
+          send message.txt
+          while read -r ref; do
+            issue="repos/${ref%#*}/issues/${ref##*#}"
+            gh api "$issue" | python3 -c 'import json, sys; json.dump({"action": "closed", "issue": json.load(sys.stdin)}, sys.stdout)' > issue.json
+            gh api "$issue/comments?per_page=100" > comments.json
+            python3 tools/tg_notify.py --event issues --payload issue.json --comments comments.json > message.txt
+            send message.txt
+          done < closed.txt

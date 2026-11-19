@@ -57,6 +57,7 @@ run "ruff" ruff check .
 run "pytest" pytest_or_none
 run "backlog.py --selftest" python3 tools/backlog.py --selftest
 run "secret_scan.py --selftest" python3 tools/secret_scan.py --selftest
+run "handover_check.py --selftest" python3 tools/handover_check.py --selftest
 run "changelog.py --selftest" python3 tools/changelog.py --selftest
 run "spec_check.py --selftest" python3 tools/spec_check.py --selftest
 run "claude_hooks.py --selftest" python3 tools/claude_hooks.py --selftest
@@ -64,6 +65,11 @@ run "fpsr.py --selftest" python3 tools/fpsr.py --selftest
 run "context_check.py --selftest" python3 tools/context_check.py --selftest
 run "pr_link.py --selftest" python3 tools/pr_link.py --selftest
 run "post_merge.py --selftest" python3 tools/post_merge.py --selftest
+run "tg_send.py --selftest" python3 tools/tg_send.py --selftest
+run "tg_inbox.py --selftest" python3 tools/tg_inbox.py --selftest
+run "tg_export.py --selftest" python3 tools/tg_export.py --selftest
+run "tg_notify.py --selftest" python3 tools/tg_notify.py --selftest
+run "tg_ping.py --selftest" python3 tools/tg_ping.py --selftest
 run "closing_words.py --selftest" python3 tools/closing_words.py --selftest
 run "commit_check.py --selftest" python3 tools/commit_check.py --selftest
 run "guard.py --selftest" python3 .agents/guards/guard.py --selftest
