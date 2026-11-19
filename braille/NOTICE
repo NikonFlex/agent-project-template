@@ -1,0 +1,57 @@
+Пакет braille — экраны для агентов (шаблон agent-project-template).
+
+Взято из agent-braille (https://github.com/blurman-ai/agent-braille), лицензия Apache-2.0
+(текст — LICENSE рядом), коммит 2a778d0 от 02.11.2026:
+  runtime/install.ts, inspect.ts, busy.ts, errorsLog.ts, screenState.ts, types.ts;
+  проверка видимости visualProblems и сборка ответа observe из lib/browser.mjs.
+Результат — один файл agent.js; в его шапке указано то же.
+
+Исполнитель шагов — Python, модули steps.py, verdicts.py, browser.py, actions.py,
+network.py, executor.py, session.py, evidence.py, selftest.py, __main__.py; взято:
+  lib/steps.mjs      -> steps.py, verdicts.py   (язык шагов, разбор, проверки, противоречия);
+  lib/browser.mjs    -> browser.py, actions.py  (ожидание покоя, перекрытие, наблюдение, шаги);
+  lib/session.mjs    -> session.py              (сессия файлами, переходы state.json, heartbeat);
+  lib/executor.mjs   -> executor.py, network.py (шаг от начала до улик, запросы шага);
+  lib/evidence.mjs   -> evidence.py             (улики красного шага, маскировка секретов);
+  bin/braille.mjs    -> __main__.py, session.py (start, step, look, close, selftest);
+  lib/selftest.mjs   -> selftest.py             (идея контрольных случаев; случаи наши).
+
+Изменено:
+  - TypeScript переписан на простой JavaScript одним файлом без сборки и зависимостей;
+  - screen() отдаёт готовый ответ шага (экран, элементы, поля, подписи, списки, заголовки,
+    слои, факты, текст), а не сырой ScreenInfo; у поля есть значение, у закрытой кнопки —
+    то, что её закрывает; поле и подпись отбираются по «нет testid вида <область>.<действие>»,
+    а не по «нет testid»;
+  - visual() работает в самой странице, а не через page.evaluate исполнителя, и отдаёт
+    объекты {kind, text, message} с русским текстом вместо английских строк;
+  - busy() сам считает fetch, XMLHttpRequest и переходы страницы (beforeunload, отправка формы
+    без preventDefault); источники своего JS — registerBusySource (в оригинале это единственный
+    способ);
+  - ошибка отменённого fetch (AbortError) не попадает в errors();
+  - не перенесены описания tools для WebMCP, переключатели switches и queryScreenState
+    (React Query): нам не нужны;
+  - включение — переменная окружения AGENT_API на сервере (braille/__init__.py), а не
+    флаг сборки Vite.
+
+Изменено в исполнителе:
+  - Node заменён на Python и Playwright sync API; экран, поиск и занятость исполнитель берёт из
+    window.__agent (agent.js), а не повторяет в своём коде;
+  - запросы шага — не только /api: у нас HTML собирает сервер, поэтому в api идут переходы
+    страницы (document), отправки форм и fetch/XHR; скрипты, стили и картинки не считаются;
+  - sent маскирует и тела форм (application/x-www-form-urlencoded), поля password, token,
+    secret, cookie, authorization, csrf и значения --values (у них только JSON);
+  - notices, contradictions, visual, sent — в корне ответа шага, а не внутри observed;
+    замечание visual на той же странице не повторяется; в ответе есть ms;
+  - выход «упавший запрос и тишина в сети» сохранён (BRAILLE_API_FAIL_GRACE_MS), но запросы шага
+    считаются по событиям Playwright, а не по errors() страницы, и называются в ошибке шага;
+    notices переживают переход страницы (sessionStorage);
+  - пока страница уходит (документ в пути), её не опрашивают: evaluate стоит до новой страницы;
+  - настройки (окна, сроки, маски, хосты) — config/braille.json, переменные BRAILLE_* их
+    переопределяют; окно телефона 390x844 добавлено;
+  - шаг fill умеет <select> (пункт по тексту); лишние ключи шага — отказ; пауза по времени — отказ
+    при разборе, а не при проверке сценария;
+  - не перенесены: запись и воспроизведение API (api-records), mutate, hold, cut, advance,
+    visibility, download, described, same-href, active, учётные данные BRAILLE_CREDENTIAL,
+    install/check-runtime/check-build (решение docs/decisions.md);
+  - команда selftest — наша: разбор шагов и сценариев, хосты, переходы сессии, противоречия,
+    маскировка секретов без браузера; в tools/check.sh.

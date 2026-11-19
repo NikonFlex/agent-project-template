@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>Контрольная страница: форма входа</title>
+<script src="/braille/agent.js"></script>
+<body>
+<main data-testid="screen.form" data-state="ready">
+  <h1>Вход</h1>
+  <form method="post" action="/steps_next.html" data-testid="form.login">
+    <p><label for="name">Имя</label> <input id="name" name="name"></p>
+    <p><label for="pass">Пароль</label> <input id="pass" name="password" type="password"></p>
+    <button data-testid="form.submit">Войти</button>
+  </form>
+</main>

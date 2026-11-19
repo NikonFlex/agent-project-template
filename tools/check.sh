@@ -57,6 +57,7 @@ run "ruff" ruff check .
 run "pytest" pytest_or_none
 run "backlog.py --selftest" python3 tools/backlog.py --selftest
 run "secret_scan.py --selftest" python3 tools/secret_scan.py --selftest
+run "braille selftest" python3 -m braille selftest
 run "handover_check.py --selftest" python3 tools/handover_check.py --selftest
 run "changelog.py --selftest" python3 tools/changelog.py --selftest
 run "spec_check.py --selftest" python3 tools/spec_check.py --selftest

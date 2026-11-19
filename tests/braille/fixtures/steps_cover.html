@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>Контрольная страница: кнопка под панелью</title>
+<script src="/braille/agent.js"></script>
+<link rel="stylesheet" href="/base.css">
+<style>
+  /* панель лежит поверх кнопки «Добавить», как незакрытая шторка */
+  aside { position: fixed; top: 0; left: 0; width: 400px; height: 200px; background: #def;
+          border: 1px solid #99c; }
+</style>
+<body>
+<main data-testid="screen.cover" data-state="ready">
+  <h1>Заказы</h1>
+  <button data-testid="cover.add" onclick="document.title = 'нажато'">Добавить</button>
+  <button data-testid="cover.off" disabled>Выгрузить</button>
+</main>
+<aside data-testid="panel.filters" aria-label="Панель фильтров">Фильтры</aside>

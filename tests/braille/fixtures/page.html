@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>Контрольная страница: заказы</title>
+<script src="/braille/agent.js"></script>
+<link rel="stylesheet" href="/base.css">
+<style>
+  button, input, select { margin: 0 8px 8px 0; }
+  /* конечная и бесконечная анимации: занятостью считается только первая */
+  .slide { animation: slide 30s linear forwards; }
+  .spin { animation: slide 1s linear infinite; }
+  @keyframes slide { to { transform: translateX(10px); } }
+</style>
+<body>
+<main data-testid="screen.orders" data-state="ready">
+  <h1>Заказы</h1>
+  <span data-fact="filter" data-fact-value="all"></span>
+  <p>
+    <button data-testid="orders.add" onclick="out('добавлено')">Добавить</button>
+    <button data-testid="orders.refresh">Обновить</button>
+    <button data-testid="orders.export" disabled>Выгрузить</button>
+    <button>Без разметки</button>
+    <a href="/other.html" data-testid="orders.other">Другая страница</a>
+  </p>
+  <p>
+    <label for="q">Поиск заказа</label>
+    <input id="q" data-testid="q" oninput="out('поиск: ' + this.value)">
+    <select data-testid="status" aria-label="Статус" onchange="out('статус: ' + this.value)">
+      <option value="all">Все</option>
+      <option value="open">Открытые</option>
+    </select>
+  </p>
+  <p>
+    <button data-testid="orders.slow" onclick="fetch('/api/slow')">Медленно</button>
+    <button data-testid="orders.xhr" onclick="viaXhr('/api/slow')">Через XHR</button>
+    <button data-testid="orders.broken" onclick="fetch('/api/broken')">Сломано</button>
+    <button data-testid="orders.down" onclick="fetch('/api/down').catch(() => {})">Нет связи</button>
+  </p>
+  <form action="/other.html" method="get">
+    <button data-testid="orders.send">Отправить форму</button>
+  </form>
+  <p id="out">пусто</p>
+  <div class="slide">идёт</div>
+  <div class="spin">крутится</div>
+</main>
+<script>
+  function out(text) { document.getElementById("out").textContent = text; }
+  function viaXhr(url) {
+    const request = new XMLHttpRequest();
+    request.open("GET", url);
+    request.send();
+  }
+</script>

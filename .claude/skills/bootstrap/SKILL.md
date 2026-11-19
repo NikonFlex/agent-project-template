@@ -57,6 +57,13 @@ description: Первый заход в проекте, созданном из 
     `protection` в `tools/agent_rules.py` (`--write` уберёт копии), строки в `tools/check.sh`,
     `tools/harness.py`, `AGENTS.md` и `CLAUDE.md`. Да — заполнить места `{{…}}`
     `docs/agents/protection.md`;
+  - **экраны для агентов (braille)** — если у проекта есть страницы: агент смотрит их шагами
+    исполнителя, а не снимками. Нет — удалить `braille/`, `tests/braille/`,
+    `config/braille.json`, `docs/agents/screens.md` и тему `screens` в `tools/agent_rules.py`
+    (`--write` уберёт копии), строку `braille selftest` в `tools/check.sh`, раздел README. Да —
+    `pip install playwright fastapi jinja2` и `python -m playwright install chromium` (версии —
+    поиском), `braille.install(app, templates)` в приложении сайта, места `{{…}}` в
+    `braille/README.md` и `docs/agents/screens.md`;
 - какие документы уже есть — прислать как есть;
 - как запускать проект, где смотреть логи — в «Команды» `AGENTS.md`, каждое одной командой;
 - дополнительные гейты для Python (по умолчанию — нет, пока нет кода): порог покрытия

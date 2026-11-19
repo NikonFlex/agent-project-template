@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>Контрольная страница: запросы</title>
+<script src="/braille/agent.js"></script>
+<body>
+<main data-testid="screen.api" data-state="ready">
+  <h1>Запросы</h1>
+  <p>
+    <button data-testid="api.save" onclick="post('/api/broken')">Сохранить</button>
+    <button data-testid="api.down" onclick="fetch('/api/down').catch(() => {})">Нет связи</button>
+    <button data-testid="api.load" onclick="load()">Загрузить</button>
+    <button data-testid="api.later" onclick="later()">Показать позже</button>
+    <button data-testid="api.refuse" onclick="post('/api/refused')">Отказ в теле</button>
+    <button data-testid="api.twice" onclick="post('/api/accepted'); post('/api/accepted')">Дважды</button>
+    <button data-testid="api.notify" onclick="notify()">Сообщить</button>
+    <a href="/steps_next.html" data-testid="api.next">Дальше</a>
+  </p>
+  <div id="spot"></div>
+</main>
+<script>
+  function post(url) { fetch(url, { method: "POST", body: "order=1" }); }
+  function add(id, text) {
+    const item = document.createElement("p");
+    item.dataset.testid = id;
+    item.textContent = text;
+    document.getElementById("spot").append(item);
+    return item;
+  }
+  function load() {
+    fetch("/api/delayed").then((r) => r.json()).then(() => add("api.done", "Загружено"));
+  }
+  function later() { setTimeout(() => add("api.late", "Появилось"), 300); }
+  function notify() {
+    const alert = document.createElement("div");
+    alert.setAttribute("role", "alert");
+    alert.textContent = "Заказ сохранён";
+    document.getElementById("spot").append(alert);
+    setTimeout(() => alert.remove(), 200);
+  }
+</script>
