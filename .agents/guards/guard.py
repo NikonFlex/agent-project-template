@@ -35,6 +35,9 @@ from task_links import has_local_repeat  # noqa: E402
 CONFIG = Path(".agents/guards/config.json")
 CODEX_RULES = Path(".codex/rules/default.rules")
 START = r"(?:^|[;&|\n(]|&&|\|\|)\s*"
+PR_CREATE = ["gh", "pr", "create"]
+PUSH = ["git", "push"]
+OPERATORS = ";&|\n"  # разделители простых команд: ; && || | и перевод строки
 
 
 class Verdict(StrEnum):
@@ -49,6 +52,7 @@ class Call:
 
     command: str = ""
     path: str = ""
+    cwd: str = ""  # папка сессии из события среды; пусто — основной клон
 
 
 #: Запись в GitHub и push — только по «да» человека. Префиксы команд (как в execpolicy Codex):
@@ -60,6 +64,8 @@ ASK = [
     ["gh", "project"],
     ["gh", "release", ["create", "edit", "delete", "upload"]],
     ["gh", "api"],
+    # видимость репо и доступ людей
+    ["gh", "repo", ["edit", "delete", "rename", "archive", "unarchive"]],
 ]
 
 
@@ -69,18 +75,63 @@ def config(root: Path) -> dict:
 
 
 def commands(command: str) -> list[list[str]]:
-    """Простые команды строки: `a && b; c | d` → [[a…], [b…], [c…], [d…]]."""
-    out = []
-    for part in re.split(r"&&|\|\||[;|\n]", command):
-        try:
-            words = shlex.split(part, comments=True)
-        except ValueError:
-            words = part.split()
-        while words and re.match(r"^\w+=", words[0]):  # VAR=1 git push
-            words = words[1:]
-        if words:
-            out.append(words)
+    """Простые команды строки: `a && b; c | d` → [[a…], [b…], [c…], [d…]]. Кавычки строка
+    держит целиком (тело PR бывает многострочным); не разобрать — по разделителям грубо.
+    `git -C <путь> push` — тоже `git push`."""
+    return [words for _, words in placed(Call(command=command), Path())]
+
+
+def placed(call: Call, root: Path) -> list[tuple[Path, list[str]]]:
+    """Простые команды с папкой, где каждая выполнится. Сессия агента стоит в основном
+    клоне, а работа — в дереве задачи (`cd <дерево> && git push`): ticket и файл задачи
+    берутся оттуда. `cd` меняет папку следующих команд, `git -C` — своей; папки нет — `cd`
+    не сработает, остаётся прежняя."""
+    here, out = Path(call.cwd) if call.cwd else root, []
+    for words in lexed(call.command) or _rough(call.command):
+        if words[0] == "cd" and len(words) == 2:
+            target = here / Path(words[1]).expanduser()
+            here = target if target.is_dir() else here
+        elif words[:2] == ["git", "-C"] and len(words) > 3:
+            out.append((here / Path(words[2]).expanduser(), ["git", *words[3:]]))
+        else:
+            out.append((here, words))
     return out
+
+
+def where(call: Call, root: Path, prefix: list) -> Path:
+    """Корень клона, где выполнится первая команда с префиксом; такой нет — root."""
+    here = next((d for d, words in placed(call, root) if matches(words, prefix)), root)
+    return next((d for d in (here, *here.parents) if (d / ".git").exists()), here)
+
+
+def lexed(command: str) -> list[list[str]] | None:
+    """Простые команды по shlex всей строки; `;` вплотную к слову (`create;ls`) — тоже
+    разделитель. Незакрытая кавычка — None."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=OPERATORS)
+    lexer.whitespace, lexer.whitespace_split = " \t\r", True
+    try:
+        words = list(lexer)
+    except ValueError:
+        return None
+    out, current = [], []
+    for word in [*words, ";"]:
+        if word and set(word) <= set(OPERATORS):
+            out.append(current)
+            current = []
+        else:
+            current.append(word)
+    return [w for w in map(_without_env, out) if w]
+
+
+def _rough(command: str) -> list[list[str]]:
+    parts = (part.split() for part in re.split(r"&&|\|\||[;|\n]", command))
+    return [w for w in map(_without_env, parts) if w]
+
+
+def _without_env(words: list[str]) -> list[str]:
+    while words and re.match(r"^\w+=", words[0]):  # VAR=1 git push
+        words = words[1:]
+    return words
 
 
 def matches(words: list[str], prefix: list) -> bool:
@@ -126,6 +177,16 @@ def closing(call: Call, root: Path) -> tuple[Verdict, str]:
         if hits else (Verdict.ALLOW, "")
 
 
+def creates_pr(command: str) -> bool:
+    """Есть ли в строке `gh pr create` — одна проверка для всех сторожей PR."""
+    return any(matches(w, PR_CREATE) for w in commands(command))
+
+
+def pushes(command: str) -> bool:
+    """Есть ли в строке `git push` — одна проверка для сторожей push."""
+    return any(matches(w, PUSH) for w in commands(command))
+
+
 def ticket_task(root: Path) -> Path | None:
     """Файл задачи из `git ticket`."""
     number = ticket_number(root)
@@ -136,9 +197,9 @@ def ticket_task(root: Path) -> Path | None:
 
 
 def local_repeat(call: Call, root: Path) -> tuple[Verdict, str]:
-    if not any(matches(w, ["gh", "pr", "create"]) for w in commands(call.command)):
+    if not creates_pr(call.command):
         return Verdict.ALLOW, ""
-    task = ticket_task(root)
+    task = ticket_task(where(call, root, PR_CREATE))
     if task is None:
         return Verdict.DENY, "PR без задачи: `git ticket <номер>` и файл задачи в docs/tasks/"
     if not has_local_repeat(task):
@@ -150,8 +211,9 @@ def local_repeat(call: Call, root: Path) -> tuple[Verdict, str]:
 def receipt(call: Call, root: Path) -> tuple[Verdict, str]:
     """Push, где гейт включён (tools/receipt.json, «gated»), — только с квитанцией прогона
     live или record с исходом «прошло» на том же дереве кода."""
-    if not any(matches(w, ["git", "push"]) for w in commands(call.command)):
+    if not pushes(call.command):
         return Verdict.ALLOW, ""
+    root = where(call, root, PUSH)
     gate = json.loads((root / "tools/receipt.json").read_text(encoding="utf-8"))
     if not gate.get("gated"):
         return Verdict.ALLOW, ""
@@ -183,7 +245,8 @@ def decide(call: Call, root: Path = ROOT) -> tuple[Verdict, str]:
 
 def from_claude(event: dict) -> Call:
     tool_input = event.get("tool_input") or {}
-    return Call(command=tool_input.get("command", ""), path=tool_input.get("file_path", ""))
+    return Call(command=tool_input.get("command", ""), path=tool_input.get("file_path", ""),
+                cwd=event.get("cwd", ""))
 
 
 def to_claude(verdict: Verdict, reason: str) -> int:
@@ -211,7 +274,7 @@ def to_codex(verdict: Verdict, reason: str) -> int:
 
 def from_cursor(event: dict) -> Call:
     return Call(command=event.get("command", ""),
-                path=event.get("file_path", "") or event.get("path", ""))
+                path=event.get("file_path", "") or event.get("path", ""), cwd=event.get("cwd", ""))
 
 
 def to_cursor(verdict: Verdict, reason: str) -> int:

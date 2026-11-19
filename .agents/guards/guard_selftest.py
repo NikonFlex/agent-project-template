@@ -32,6 +32,11 @@ CASES = [
     (Call(command="git push origin main"), Verdict.ASK, "запись в GitHub"),
     (Call(command="cd repo && gh pr merge 12"), Verdict.ASK, "gh pr merge"),
     (Call(command="gh issue view 12"), Verdict.ALLOW, ""),
+    (Call(command="gh repo edit --visibility public"), Verdict.ASK, "gh repo edit"),
+    (Call(command="gh repo view owner/repo"), Verdict.ALLOW, ""),
+    (Call(command="git -C ../tree push"), Verdict.ASK, "git push"),
+    # разделитель внутри кавычек — текст, а не вторая команда
+    (Call(command="gh issue view 12 --comments 'a; git push origin x'"), Verdict.ALLOW, ""),
     (Call(command="git log --oneline"), Verdict.ALLOW, ""),
     (Call(command="ssh deploy@prod-1 systemctl restart app"), Verdict.ASK, "прод"),
     (Call(command="cat .env"), Verdict.DENY, "ключами"),
@@ -92,6 +97,30 @@ def pr_and_push(tmp: Path) -> list[str]:
     return bad
 
 
+def command_folder(tmp: Path) -> list[str]:
+    """Сессия — в клоне без ticket, работа — в дереве задачи: PR и push смотрятся в папке
+    команды (`cd`, `git -C`, папка сессии из события), а не в папке сессии."""
+    session = project(tmp / "session", repeat=True, gated=False)
+    (session / ".git/ticket").unlink()
+    tree = project(tmp / "tree", repeat=True, gated=True)
+    os.environ["STAND_STATE_DIR"] = str(tmp / "state-folder")
+    pr = "gh pr create --title t --body 'Implements ab#12'"
+    wanted = [
+        (Call(command=pr), Verdict.DENY, "PR без задачи"),
+        (Call(command=f"cd {tree} && {pr}"), Verdict.ASK, "gh pr create"),
+        (Call(command=pr, cwd=str(tree)), Verdict.ASK, "gh pr create"),
+        (Call(command=f"cd {tmp}/нет && {pr}"), Verdict.DENY, "PR без задачи"),
+        # гейт квитанции включён только в дереве: push оттуда без квитанции — отказ
+        (Call(command=f"cd {tree} && git push"), Verdict.DENY, "квитанции"),
+        (Call(command=f"git -C {tree} push"), Verdict.DENY, "квитанции"),
+        (Call(command="git push"), Verdict.ASK, "git push"),
+    ]
+    return [f"{call}: {verdict} «{why}», ждали {verdict_wanted} «{reason}»"
+            for call, verdict_wanted, reason in wanted
+            for verdict, why in [decide(call, session)]
+            if verdict != verdict_wanted or reason not in why]
+
+
 def formats() -> list[str]:
     bad = []
     out, err = io.StringIO(), io.StringIO()
@@ -123,10 +152,11 @@ def selftest() -> int:
     state = os.environ.get("STAND_STATE_DIR")
     with tempfile.TemporaryDirectory() as tmp:
         root = project(Path(tmp) / "base", repeat=True, gated=False)
-        bad = cases(root) + pr_and_push(Path(tmp)) + formats()
+        bad = cases(root) + pr_and_push(Path(tmp)) + command_folder(Path(tmp)) + formats()
     if state is None:
         os.environ.pop("STAND_STATE_DIR", None)
     else:
         os.environ["STAND_STATE_DIR"] = state
     return report(bad, f"{len(CASES)} входов сторожей, PR без «Локального повтора», квитанция "
-                       "push, форматы Claude Code / Codex / Cursor, правила Codex")
+                       "push, папка команды (cd, git -C, папка сессии), форматы Claude Code / "
+                       "Codex / Cursor, правила Codex")
