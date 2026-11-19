@@ -28,3 +28,6 @@ __pycache__/
 .ruff_cache/
 # база pytest-testmon (tools/check.sh --quick)
 .testmondata*
+
+# вложения из Telegram — чужие файлы любого вида (tools/tg_export.py)
+materials/telegram/

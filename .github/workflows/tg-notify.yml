@@ -1,0 +1,57 @@
+name: tg-notify
+
+# События репозитория → тема «Задачи и PR» Telegram-группы. Текст собирает tools/tg_notify.py, отправляет tools/tg_send.py send —
+# повторы и деление текста там. Слияние и закрытие задач меткой automerge сделаны токеном
+# github.token и сюда не приходят: о них шлёт job automerge в check.yml; `closed` здесь — для
+# PR и задач, закрытых руками. Красный полный набор на main — workflow_run от post-merge.
+on:
+  issues:
+    types: [opened, closed]
+  pull_request:
+    types: [opened, reopened, ready_for_review, closed]
+  workflow_run:
+    workflows: [post-merge]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  notify:
+    # зелёный прогон не интересен — даже раннер не поднимаем; события всех участников
+    # репозитория идут в группу
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Итог закрытой задачи
+        if: github.event_name == 'issues' && github.event.action == 'closed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments?per_page=100" > comments.json
+
+      - name: Текст
+        run: |
+          args=""
+          [ -f comments.json ] && args="--comments comments.json"
+          python3 tools/tg_notify.py --event "$GITHUB_EVENT_NAME" --payload "$GITHUB_EVENT_PATH" $args > message.txt
+          cat message.txt
+
+      - name: Отправить
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_THREAD_TASKS: ${{ secrets.TELEGRAM_THREAD_TASKS }}
+        # пустой текст — событие, о котором молчим; сбой отправки прогон не красит
+        run: |
+          [ -s message.txt ] || { echo "молчим"; exit 0; }
+          python3 tools/tg_send.py send --topic tasks --file message.txt \
+            || echo "::warning::уведомление в Telegram не ушло"

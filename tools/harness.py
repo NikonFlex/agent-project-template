@@ -29,6 +29,7 @@ SELFTESTS = [
     "tools/closing_words.py", "tools/pr_link.py", "tools/post_merge.py", "tools/claude_hooks.py",
     "tools/fpsr.py", "tools/context_check.py",
     "tools/context_budget.py", "tools/agent_rules.py", "tools/secret_scan.py", "tools/changelog.py",
+    "tools/handover_check.py",
     ".agents/guards/guard.py",
 ]
 STATE_CHECKS = [["tools/agent_rules.py"], ["tools/context_budget.py"],

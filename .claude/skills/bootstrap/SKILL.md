@@ -45,6 +45,18 @@ description: Первый заход в проекте, созданном из 
   версии»). Да — оставить `.github/workflows/release.yml` и `cliff.toml`, первая версия —
   `v0.1.0` (или другая в `initial_tag`); нет — удалить оба и `tools/changelog.py` из
   `tools/check.sh` и `tools/harness.py`;
+- **модули по желанию** (README, «Модули по желанию»), по умолчанию — выключены:
+  - **Telegram** — бот процесса: входящие, вопросы, события репозитория, пинг Claude. Нет —
+    удалить `tools/tg_*.py`, `.github/workflows/tg-notify.yml` и `tg-pull.yml`,
+    `.claude/skills/inbox/`, `.claude/skills/questions/`, `.claude/ping.json`; строки `tg_` в
+    `tools/check.sh`, хуки `tg_ping.py` в `.claude/settings.json`, шаг «Telegram — PR слит» в
+    `.github/workflows/check.yml`, `materials/telegram/` в `.gitignore`, раздел README и
+    упоминания в `CLAUDE.md`. Да — настройка по README, «Telegram»;
+  - **передача наружу** — проверка всего, что уходит продакту и заказчику. Нет — удалить
+    `tools/handover_check.py`, `.claude/skills/handover/`, `docs/agents/protection.md` и тему
+    `protection` в `tools/agent_rules.py` (`--write` уберёт копии), строки в `tools/check.sh`,
+    `tools/harness.py`, `AGENTS.md` и `CLAUDE.md`. Да — заполнить места `{{…}}`
+    `docs/agents/protection.md`;
 - какие документы уже есть — прислать как есть;
 - как запускать проект, где смотреть логи — в «Команды» `AGENTS.md`, каждое одной командой;
 - дополнительные гейты для Python (по умолчанию — нет, пока нет кода): порог покрытия

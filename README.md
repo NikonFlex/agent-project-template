@@ -66,6 +66,45 @@ claude            # и в чате: /bootstrap
 | `.github/workflows/check.yml` | CI на PR: `fast` (`check.sh --fast`), `pr-link`, `automerge` — сливает, закрывает задачи из `Closes`, запускает `post-merge` |
 | `ruff.toml` | настройки линтера; `tools/backlog.py` исключён — готовый инструмент |
 
+## Модули по желанию
+
+`/bootstrap` спрашивает, какие включить; выключенный модуль удаляется вместе со своими файлами
+и строками в `tools/check.sh` и `.claude/settings.json`.
+
+### Telegram
+
+Бот процесса инженеров, не продукта. Группа хозяина с темами «Входящие», «Разбор»,
+«Вопросы», «Задачи и PR», «Результаты», «Claude». События репозитория идут в «Задачи и PR»:
+новая и закрытая задача (со сводкой), PR открыт и слит, красный полный набор после слияния
+(Action [tg-notify](.github/workflows/tg-notify.yml), текст — [tools/tg_notify.py](tools/tg_notify.py);
+PR и задачи, которые сливает и закрывает CI, шлёт job `automerge` — токен CI других workflow
+не запускает). Claude закончил ход дольше `min_minutes` из [.claude/ping.json](.claude/ping.json)
+или ждёт разрешения — пинг в «Claude» ([tools/tg_ping.py](tools/tg_ping.py), хуки
+`.claude/settings.json`). Отправка — [tools/tg_send.py](tools/tg_send.py). Без токена в `.env`
+скрипты молчат и выходят с кодом 0.
+
+Настройка, один раз:
+
+1. @BotFather → `/newbot`; токен — в `.env` как `TELEGRAM_BOT_TOKEN`.
+2. Группа с включёнными темами, названия — как выше; бот — админ группы.
+3. Написать что-нибудь в каждую тему и выполнить `python3 tools/tg_send.py discover --save` —
+   id группы, хозяина и номера тем запишутся в `.env`.
+4. Проба: `python3 tools/tg_send.py send --topic tasks --file <текст>` — сообщение в теме;
+   `--thread 999999` — отказ 400.
+5. Секреты репозитория для Action: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
+   `TELEGRAM_THREAD_TASKS`, для сбора ещё `TELEGRAM_OWNER_ID`, `TELEGRAM_THREAD_INBOX`
+   (`gh secret set <имя> --repo <владелец>/<репо>`, значение — с клавиатуры).
+
+Переписку с продактом или инженерами хозяин пересылает пачкой в тему «Входящие». Бот забирает
+новое в буфер — ветку `tg-inbox`: раз в 4 часа и по запросу `/inbox` (Action
+[tg-pull](.github/workflows/tg-pull.yml), скрипт [tools/tg_inbox.py](tools/tg_inbox.py)); в
+теме он отвечает «принял N, новых M, повторов K». `/inbox` собирает новое сейчас, выгружает
+в `docs/incoming/` ([tools/tg_export.py](tools/tg_export.py); вложения — в
+`materials/telegram/`, вне git), разбирает по спекам и пишет итог в «Разбор». Вопросы
+продакту или инженерам — `/questions`, только по просьбе хозяина: в «Вопросы» сообщение
+уходит по «отправь», адресату его пересылает хозяин. Файлы и сводки — в «Результаты»:
+`python3 tools/tg_send.py send-file --topic results --file <файл>`.
+
 ## Как идёт работа
 
 ```
