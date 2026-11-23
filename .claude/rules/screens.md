@@ -3,7 +3,9 @@ paths:
   - "braille/**"
   - "tests/braille/**"
   - "tests/scenarios/**"
+  - "tests/e2e/**"
   - "**/templates/**"
+  - "**/static/**"
 ---
 
 <!-- Копия docs/agents/screens.md — правится там, пересборка: tools/agent_rules.py --write -->
@@ -26,6 +28,9 @@ paths:
   роль и имя (`{"role": "checkbox", "name": "…", "contains": true}`); это дыра разметки —
   записать в «Что осталось» задачи.
 - `look` — весь экран без шага: `elements`, `fields`, `labels`, текст, замечания о виде.
+- В ручном прогоне видимый текст проверяется отдельным шагом, например
+  `python3 -m braille step '{"wait":"Вход"}'`. Поля `after.shown` и `after.gone` принимают
+  списки `testid`. Для удалённого тестового контура указать имя хоста в `BRAILLE_ALLOWED_HOSTS`.
 
 ## Чему верить в ответе шага
 

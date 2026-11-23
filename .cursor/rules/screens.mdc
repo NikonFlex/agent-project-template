@@ -1,6 +1,6 @@
 ---
 description: "Загружается, когда агент открывает шаблон сайта, сценарий или пакет `braille`. Экран агент смотрит шагами исполнителя, а не снимками. Устройство — `braille/README.md`, решение — `docs/decisions.md`, «Экраны для агентов…». Модуль по желанию: `/bootstrap` убирает его, если у проекта нет страниц. Общие правила — `AGENTS.md`."
-globs: braille/**,tests/braille/**,tests/scenarios/**,**/templates/**
+globs: braille/**,tests/braille/**,tests/scenarios/**,tests/e2e/**,**/templates/**,**/static/**
 alwaysApply: false
 ---
 
@@ -24,6 +24,9 @@ alwaysApply: false
   роль и имя (`{"role": "checkbox", "name": "…", "contains": true}`); это дыра разметки —
   записать в «Что осталось» задачи.
 - `look` — весь экран без шага: `elements`, `fields`, `labels`, текст, замечания о виде.
+- В ручном прогоне видимый текст проверяется отдельным шагом, например
+  `python3 -m braille step '{"wait":"Вход"}'`. Поля `after.shown` и `after.gone` принимают
+  списки `testid`. Для удалённого тестового контура указать имя хоста в `BRAILLE_ALLOWED_HOSTS`.
 
 ## Чему верить в ответе шага
 
