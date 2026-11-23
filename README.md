@@ -9,6 +9,7 @@
 Помимо базового шаблона, в репозиторий добавлен текущий рабочий сетап для разработки с агентами в BB:
 
 - [Рабочий процесс в BB](docs/workflow.md) — роли (`Sol`, `Neon`, `Flash`, `Jev`), формат короткого плана, передача между тредами на одном worktree, приёмка по квитанциям и ночной аудит.
+- Навыки процесса в `.agents/skills/` (копии в `.claude/skills/`): `pr-review` (гипотезное ревью + `jev_fact_check`), `nightly-audit` (ночной контур Фазы 2 и аудит спек), `spec-grill` (допрос перед правкой спек), `clean-contour-check`.
 - [Плагины BB](docs/plugins.md) — исходники и манифесты `plugins/bb-jev`, `plugins/limits-card`, `plugins/bb-antigravity-usage`, `plugins/glm-idle`.
 - Инструменты в `tools/` и конфиги в `config/`:
   - `tools/bb_arena.py`, `config/bb_arena.json`, `config/arena/review-01.patch` — Арена моделей, скоринг скрытых тестов и цепочка `Jev v2`.
