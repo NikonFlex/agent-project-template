@@ -1,6 +1,7 @@
 line-length = 100
 # версия Python CI (.github/workflows/check.yml): локальный ruff проверяет так же
 target-version = "py312"
+extend-exclude = ["plugins/**"]
 
 
 [lint]

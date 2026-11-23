@@ -10,7 +10,8 @@
     "**/.git/**",
     "**/node_modules/**",
     "**/.venv/**",
-    "**/outputs/**"
+    "**/outputs/**",
+    "plugins/**"
   ],
   "reporters": ["console"],
   "exitCode": 1

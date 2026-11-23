@@ -4,6 +4,25 @@
 требования — в спеках, работа — по задачам, находки записываются сразу, проверки — в CI. Стек по умолчанию — Python (ruff, pytest); другой язык
 подставляется при первом заходе.
 
+## Текущий рабочий сетап в BB
+
+Помимо базового шаблона, в репозиторий добавлен текущий рабочий сетап для разработки с агентами в BB:
+
+- [Рабочий процесс в BB](docs/workflow.md) — роли (`Sol`, `Neon`, `Flash`, `Jev`), формат короткого плана, передача между тредами на одном worktree, приёмка по квитанциям и ночной аудит.
+- [Плагины BB](docs/plugins.md) — исходники и манифесты `plugins/bb-jev`, `plugins/limits-card`, `plugins/bb-antigravity-usage`, `plugins/glm-idle`.
+- Инструменты в `tools/` и конфиги в `config/`:
+  - `tools/bb_arena.py`, `config/bb_arena.json`, `config/arena/review-01.patch` — Арена моделей, скоринг скрытых тестов и цепочка `Jev v2`.
+  - `tools/bb_tree.py`, `config/bb_models.json` — дерево тредов и метрики токенов/цены.
+  - `tools/nightly_audit.py`, `tools/nightly_automation.py`, `tools/nightly-requirements.txt` — ночной аудит изменений приложения и тихий пропуск.
+  - `tools/demo.py` — автономная проверка скорёра на синтетической задаче `quote-rounding`.
+
+Быстрая проверка сетапа без сети и BB:
+
+```sh
+python3 tools/demo.py
+python3 tools/bb_arena.py --plan --suite smart --variant jev-v2
+```
+
 ## Начать новый проект
 
 ```

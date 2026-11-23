@@ -1,0 +1,74 @@
+{
+  "base_commit": "HEAD",
+  "providers": [
+    {
+      "provider": "codex",
+      "model": "gpt-6.2-sol"
+    },
+    {
+      "provider": "acp-opencode",
+      "model": "deepseek/deepseek-flash"
+    }
+  ],
+  "variants": [
+    {
+      "id": "baseline",
+      "jev": false,
+      "prompt_suffix": ""
+    },
+    {
+      "id": "jev",
+      "jev": true,
+      "prompt_suffix": " Перед правками вызови jev_check_plan по требованиям и плану, перед завершением — jev_acceptance по диффу и выводу тестов."
+    },
+    {
+      "id": "jev-v2",
+      "jev": true,
+      "jev_v2": true
+    }
+  ],
+  "tasks": [
+    {
+      "id": "quote-rounding",
+      "type": "code",
+      "base_commit": "HEAD",
+      "prompt": "Исправь округление цены в quote.py. По договору вход — целые копейки, выход — целые рубли, половина округляется вверх. Примеры: 149 → 1, 150 → 2, 250 → 3. Проверь тестами. Разрешена правка quote.py и тестов.",
+      "hidden_tests": [
+        "tests/test_quote.py"
+      ],
+      "zone": [
+        "quote.py"
+      ]
+    }
+  ],
+  "pipelines": [
+    {
+      "id": "gpt-6.2-sol->deepseek-flash",
+      "planner": {
+        "provider": "codex",
+        "model": "gpt-6.2-sol"
+      },
+      "coder": {
+        "provider": "acp-opencode",
+        "model": "deepseek/deepseek-flash"
+      }
+    }
+  ],
+  "suites": {
+    "smart": [
+      {
+        "tasks": [
+          "quote-rounding"
+        ],
+        "pipelines": [
+          "gpt-6.2-sol->deepseek-flash"
+        ],
+        "variants": [
+          "baseline",
+          "jev",
+          "jev-v2"
+        ]
+      }
+    ]
+  }
+}

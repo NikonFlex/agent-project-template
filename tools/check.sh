@@ -97,5 +97,9 @@ run "req_status.py: docs/examples/project" python3 tools/req_status.py docs/exam
 run "openspec validate --strict" openspec_validate .
 run "openspec validate --strict: docs/examples/project" openspec_validate docs/examples/project
 run "context_check.py" python3 tools/context_check.py
+run "bb_tree.py --selftest" python3 tools/bb_tree.py --selftest
+run "bb_arena.py --selftest" python3 tools/bb_arena.py --selftest
+run "nightly_audit.py --selftest" python3 tools/nightly_audit.py --selftest
+run "nightly_automation.py --selftest" python3 tools/nightly_automation.py --selftest
 run "jscpd" npx -y jscpd@5.3.3 -c .jscpd.json .
 exit $failed

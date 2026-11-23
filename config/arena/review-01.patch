@@ -1,0 +1,7 @@
+diff --git a/quote.py b/quote.py
+--- a/quote.py
++++ b/quote.py
+@@ -1,2 +1,2 @@
+ def rubles(kopecks: int) -> int:
+-    return round(kopecks / 100)
++    return (kopecks + 50) // 100

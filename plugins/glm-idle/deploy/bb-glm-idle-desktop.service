@@ -1,0 +1,32 @@
+[Unit]
+Description=ZCode Desktop for BB GLM Idle
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=bb-glm-idle
+Group=bb-glm-idle
+UMask=0077
+StateDirectory=bb-glm-idle
+StateDirectoryMode=0700
+RuntimeDirectory=bb-glm-idle
+RuntimeDirectoryMode=0700
+WorkingDirectory=/var/lib/bb-glm-idle/profile
+Environment=HOME=/var/lib/bb-glm-idle/profile
+Environment=XDG_CONFIG_HOME=/var/lib/bb-glm-idle/profile/config
+Environment=XDG_CACHE_HOME=/var/lib/bb-glm-idle/profile/cache
+Environment=XDG_DATA_HOME=/var/lib/bb-glm-idle/profile/data
+Environment=ZCODE_DATA_BASE_DIR=/var/lib/bb-glm-idle/profile
+Environment=ZCODE_CREDENTIAL_SECRET_FILE=/var/lib/bb-glm-idle/profile/credential-encryption
+ExecStart=/usr/bin/node /opt/bb-glm-idle/desktop-bridge.mjs /opt/bb-glm-idle/ZCode/zcode /run/bb-glm-idle/desktop.sock
+Restart=always
+RestartSec=5s
+TimeoutStopSec=20s
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

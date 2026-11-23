@@ -1,0 +1,39 @@
+{
+  "name": "bb-jev",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "bb": ">=0.50",
+    "bbPluginSdk": ">=0.6.157"
+  },
+  "bb": {
+    "name": "Jev",
+    "description": "Проверка плана, приёмки и утверждений через TypeSafe AI",
+    "branding": {
+      "icon": "ClipboardCheck"
+    },
+    "server": "./server.ts",
+    "skills": [
+      "skills"
+    ]
+  },
+  "scripts": {
+    "check": "tsc",
+    "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test *.test.ts"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "0.7.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.157",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.3.0",
+    "better-sqlite3": "^12.0.0",
+    "cron-parser": "^5.5.0",
+    "hono": "^4.11.9",
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "window_default_tokens": 200000,
+  "subscription_providers": ["codex", "acp-antigravity", "zai-coding-plan"],
+  "api_price_usd_per_1m": {
+    "deepseek/deepseek-v4-pro": 1.98,
+    "deepseek/deepseek-flash": 0.6,
+    "acp-opencode": 1.32
+  },
+  "notes": {
+    "defaults": "для подписок расход — % окна, для API — $ по цене выхода за 1M",
+    "utility": "мелкие механические задачи (прогнать тесты, проверить, открыть PR) — deepseek-flash или бесплатные модели acp-opencode",
+    "catalog": "22.11.2026: deepseek-flash $0.15 вход / $0.60 выход, deepseek-v4-pro $0.66 / $1.98, выход кэша $0.003 и $0.022"
+  }
+}
