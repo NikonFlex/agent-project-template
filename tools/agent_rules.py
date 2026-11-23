@@ -24,7 +24,8 @@ TOPICS = {
     "code": ["**/*.py", "**/*.toml", "requirements*.txt"],
     "specs": ["openspec/**", "docs/incoming/**", "docs/examples/project/**"],
     "tasks": ["docs/tasks/**"],
-    "screens": ["braille/**", "tests/braille/**", "tests/scenarios/**", "**/templates/**"],
+    "screens": ["braille/**", "tests/braille/**", "tests/scenarios/**", "tests/e2e/**",
+                "**/templates/**", "**/static/**"],
     "protection": ["LICENSE", ".env.example", "tools/handover_check.py", ".agents/guards/**"],
 }
 NOTE = ("<!-- Копия docs/agents/{topic}.md — правится там, "

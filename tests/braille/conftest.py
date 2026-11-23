@@ -11,7 +11,8 @@ import pytest
 from agent_pages import ORIGIN, Held, serve
 
 
-@pytest.fixture(scope="session")
+# sync_playwright закрывает свой asyncio-цикл до тестов других модулей с asyncio.run().
+@pytest.fixture(scope="module")
 def browser():
     sync_api = pytest.importorskip("playwright.sync_api")
     with sync_api.sync_playwright() as playwright:
