@@ -244,28 +244,23 @@ def e2e_stage(root: Path, junit: Path) -> dict:
 
 
 def mutation_project(root: Path, work: Path, targets: list[str]) -> None:
-    for directory in (
-        "welta",
-        "tests",
-        "tools",
-        "config",
-        "openspec",
-        "connector",
-        "deploy",
-        ".agents/guards",
-    ):
-        shutil.copytree(
-            root / directory, work / directory, ignore=shutil.ignore_patterns("__pycache__", "e2e")
-        )
-    shutil.copy2(root / "pytest.ini", work)
+    roots = sorted({Path(target).parts[0] for target in targets})
+    support = ["tests", "tools", "config", "openspec"]
+    for directory in sorted(set(roots + support)):
+        if (root / directory).is_dir():
+            shutil.copytree(
+                root / directory, work / directory,
+                ignore=shutil.ignore_patterns("__pycache__", "e2e", ".env", ".env.*"),
+            )
+    if (root / "pytest.ini").is_file():
+        shutil.copy2(root / "pytest.ini", work)
+    options = [path for path in support + ["pytest.ini"] if (work / path).exists()]
     (work / CONFIG).write_text(
         "[tool.mutmut]\n"
-        'source_paths = ["welta", ".agents/guards"]\n'
+        f"source_paths = {json.dumps(roots)}\n"
         f"only_mutate = {json.dumps(targets)}\n"
-        'also_copy = ["tests", "tools", "config", "openspec", "connector", "deploy", '
-        '"pytest.ini"]\n'
-        'pytest_add_cli_args_test_selection = ["-m", "not slow and not e2e", '
-        '"--ignore=tests/test_mailbox.py"]\n'
+        f"also_copy = {json.dumps(options)}\n"
+        'pytest_add_cli_args_test_selection = ["-m", "not slow and not e2e"]\n'
         "use_setproctitle = false\n",
         encoding="utf-8",
     )
@@ -273,7 +268,7 @@ def mutation_project(root: Path, work: Path, targets: list[str]) -> None:
 
 def mutation_stage(root: Path, work: Path, targets: list[str], workers: int) -> dict:
     if not targets:
-        return skipped("нет изменений в файлах ядра или guard.py")
+        return skipped("нет изменений в настроенных целях мутации")
     if find_spec("mutmut") is None:
         return {
             "status": Status.FAILED,
@@ -307,35 +302,52 @@ def artifact_stage(run: Callable[[], dict]) -> dict:
 def coverage_pytest(root: Path, work: Path) -> dict:
     return stage(root, [
         "env", f"COVERAGE_FILE={work / '.coverage'}", *PYTEST, "-q", "--tb=short",
-        f"--ignore={E2E}", "--cov=welta", "--cov-branch", f"--cov-report=json:{work / COVERAGE}",
+        f"--ignore={E2E}", "--cov=src", "--cov-branch", f"--cov-report=json:{work / COVERAGE}",
         f"--cov-report=lcov:{work / 'coverage.lcov'}",
     ])
 
 
-def deep_hypothesis(root: Path) -> dict:
+def deep_hypothesis(root: Path, profile: str | None) -> dict:
+    if not profile:
+        return skipped("профиль Hypothesis не задан")
     seed = secrets.randbits(32)
     result = stage(root, [
-        *PYTEST, "-q", "--tb=short", f"--ignore={E2E}", "--hypothesis-profile=welta-deep",
+        *PYTEST, "-q", "--tb=short", f"--ignore={E2E}", f"--hypothesis-profile={profile}",
         f"--hypothesis-seed={seed}", "-m", "property and slow",
     ])
+    if result.get("exit_code") == 5:
+        result |= skipped("нет тестов с маркерами property и slow")
     return {"seed": seed, **result}
 
 
+def project_tools(root: Path) -> dict:
+    path = root / CONFIG
+    return tomllib.loads(path.read_text(encoding="utf-8")).get("tool", {}) if path.exists() else {}
+
+
+def import_linter(root: Path, tools: dict) -> dict:
+    if "importlinter" not in tools and not (root / ".importlinter").is_file():
+        return skipped("нет конфигурации import-linter")
+    return stage(root, ["lint-imports", "--cache-dir", "tmp/import-linter", "--no-logo"])
+
+
 def run_stages(root: Path, work: Path, changes: dict, targets: list[str]) -> dict:
-    config = tomllib.loads((root / CONFIG).read_text(encoding="utf-8"))["tool"]["welta"]["nightly"]
+    tools = project_tools(root)
+    config = tools.get("agent_project", {}).get("nightly", {})
     cov = work / COVERAGE
-    selected = [target for target in config["mutation_targets"] if target in targets]
+    selected = sorted(set(config.get("mutation_targets", ())) & set(targets))
     return {
         "pytest": coverage_pytest(root, work),
-        "hypothesis": deep_hypothesis(root),
+        "hypothesis": deep_hypothesis(root, config.get("hypothesis_profile")),
         "e2e": artifact_stage(lambda: e2e_stage(root, work / "e2e.xml")),
-        "crap": artifact_stage(lambda: crap_stage(root, changes, cov, config["crap_threshold"])),
+        "crap": artifact_stage(
+            lambda: crap_stage(root, changes, cov, config.get("crap_threshold", 30)),
+        ),
         "mutmut": artifact_stage(
-            lambda: mutation_stage(root, work / "mutation", selected, config["mutation_workers"]),
+            lambda: mutation_stage(root, work / "mutation", selected,
+                                   config.get("mutation_workers", 2)),
         ),
-        "import-linter": stage(
-            root, ["lint-imports", "--cache-dir", "tmp/import-linter", "--no-logo"]
-        ),
+        "import-linter": import_linter(root, tools),
         "check": stage(root, ["sh", "tools/check.sh"]),
     }
 
@@ -359,7 +371,7 @@ def audit(root: Path, base: str | None) -> int:
     if base is None:
         base = default_base(root)
     else:
-        base = git(root, "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}").strip()
+        base = git(root, "rev-parse", "--verify", "--end-of-options", base).strip()
     files, untracked = changed_files(root, base)
     save_app_diff(root, base, files)
     sources = {
@@ -377,7 +389,7 @@ def audit(root: Path, base: str | None) -> int:
         "changed_files": files,
         "app_diff": str(APP_DIFF),
     }
-    with tempfile.TemporaryDirectory(prefix="welta-nightly-") as path:
+    with tempfile.TemporaryDirectory(prefix="nightly-") as path:
         targets = [path for path in files if (root / path).is_file()]
         data["stages"] = run_stages(root, Path(path), sources, targets)
     save(root, data)
@@ -429,6 +441,8 @@ def selftest() -> int:
         (success["status"] == Status.PASSED and red["exit_code"] == 7, "команды в отчёте"),
         (report_code(stages) == 1 and report_code({"clean": success}) == 0, "красный код выхода"),
         (empty["status"] == unready["status"] == Status.SKIPPED, "пропуск E2E"),
+        (project_tools(root) == {} and import_linter(root, {})["status"] == Status.SKIPPED,
+         "без конфигурации шаблон продолжает аудит"),
         (e2e_opt_in_selftest(), "PROJECT_E2E=1 должен получить только E2E-процесс pytest"),
         (crap(5, 0) == 30 and crap(5, 1) == 5 and crap(4, 0.5) == 6, "формула CRAP"),
         (ranges("@@ -4,3 +5,2 @@\n@@ -12 +12,0 @@") == [(5, 6), (12, 12)], "диапазоны"),
