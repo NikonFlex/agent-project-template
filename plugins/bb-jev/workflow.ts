@@ -1,5 +1,6 @@
 import {
-  defineRpcContract, type BbPluginApi, type PluginAgentToolContext,
+  defineRpcContract, type BbPluginApi, type ExperimentalPluginRpcHandlerContext,
+  type PluginAgentToolContext,
 } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { status } from "./checks.ts";
@@ -85,6 +86,48 @@ function checkPlanCoverage(requirements: z.infer<typeof requirementsInput>["requ
   };
 }
 
+async function reviewRequirements(
+  reviews: ReviewStore, invoke: Invoke, ctx: Audience,
+  input: z.infer<typeof requirementsInput>,
+) {
+  const result = await invoke(ctx, { coverage: requirementsQuestion }, input);
+  return reviews.save(ctx.threadId, { stage: stage.Requirements, input }, {
+    ...result, parentReviewId: null, revision: null,
+  });
+}
+
+async function reviewPlan(
+  reviews: ReviewStore, invoke: Invoke, ctx: Audience, input: z.infer<typeof planInput>,
+) {
+  const requirements = await reviewedRequirements(reviews, input.requirementsReviewId);
+  if ("error" in requirements) return requirements;
+  const coverage = checkPlanCoverage(requirements, input);
+  if (coverage.unknown.length || coverage.missing.length) {
+    return { error: refusal.Coverage, ...coverage };
+  }
+  const result = await invoke(ctx, { plan: planQuestion }, { requirements, steps: input.steps });
+  return reviews.save(ctx.threadId, { stage: stage.Plan, input }, {
+    ...result, parentReviewId: input.requirementsReviewId, revision: null,
+  });
+}
+
+async function reviewAcceptance(
+  reviews: ReviewStore, invoke: Invoke, ctx: Audience, input: z.infer<typeof acceptanceInput>,
+) {
+  const plan = reviewAtStage(await reviews.get(input.planReviewId), stage.Plan);
+  if ("error" in plan) return plan;
+  const requirements = await reviewedRequirements(reviews, plan.artifact.input.requirementsReviewId);
+  if ("error" in requirements) return requirements;
+  const questions = Object.fromEntries(requirements.map(({ id }) => [
+    id, { question: `Does the observed evidence establish requirement ${id}?`, criteria: acceptanceCriteria },
+  ]));
+  const result = await invoke(ctx, questions, { ...input, requirements, steps: plan.artifact.input.steps });
+  const { revision, planReviewId } = input;
+  return reviews.save(ctx.threadId, { stage: stage.Acceptance, input: { revision, planReviewId } }, {
+    ...result, parentReviewId: planReviewId, revision,
+  });
+}
+
 function registerRequirements(bb: BbPluginApi, reviews: ReviewStore, invoke: Invoke) {
   bb.agents.registerTool({
     name: "jev_review_requirements",
@@ -92,10 +135,7 @@ function registerRequirements(bb: BbPluginApi, reviews: ReviewStore, invoke: Inv
     presentation: { label: { pending: "Сверка требований Jev", completed: "Сверка требований Jev" } },
     parameters: requirementsInput,
     async execute(input, ctx) {
-      const result = await invoke(ctx, { coverage: requirementsQuestion }, input);
-      return textResult(await reviews.save(ctx.threadId, { stage: stage.Requirements, input }, {
-        ...result, parentReviewId: null, revision: null,
-      }));
+      return textResult(await reviewRequirements(reviews, invoke, ctx, input));
     },
   });
 }
@@ -107,16 +147,7 @@ function registerPlan(bb: BbPluginApi, reviews: ReviewStore, invoke: Invoke) {
     presentation: { label: { pending: "Сверка плана Jev", completed: "Сверка плана Jev" } },
     parameters: planInput,
     async execute(input, ctx) {
-      const requirements = await reviewedRequirements(reviews, input.requirementsReviewId);
-      if ("error" in requirements) return textResult(requirements);
-      const coverage = checkPlanCoverage(requirements, input);
-      if (coverage.unknown.length || coverage.missing.length) {
-        return textResult({ error: refusal.Coverage, ...coverage });
-      }
-      const result = await invoke(ctx, { plan: planQuestion }, { requirements, steps: input.steps });
-      return textResult(await reviews.save(ctx.threadId, { stage: stage.Plan, input }, {
-        ...result, parentReviewId: input.requirementsReviewId, revision: null,
-      }));
+      return textResult(await reviewPlan(reviews, invoke, ctx, input));
     },
   });
 }
@@ -128,18 +159,7 @@ function registerAcceptance(bb: BbPluginApi, reviews: ReviewStore, invoke: Invok
     presentation: { label: { pending: "Приёмка по требованиям Jev", completed: "Приёмка по требованиям Jev" } },
     parameters: acceptanceInput,
     async execute(input, ctx) {
-      const plan = reviewAtStage(await reviews.get(input.planReviewId), stage.Plan);
-      if ("error" in plan) return textResult(plan);
-      const requirements = await reviewedRequirements(reviews, plan.artifact.input.requirementsReviewId);
-      if ("error" in requirements) return textResult(requirements);
-      const questions = Object.fromEntries(requirements.map(({ id }) => [
-        id, { question: `Does the observed evidence establish requirement ${id}?`, criteria: acceptanceCriteria },
-      ]));
-      const result = await invoke(ctx, questions, { ...input, requirements, steps: plan.artifact.input.steps });
-      const { revision, planReviewId } = input;
-      return textResult(await reviews.save(ctx.threadId, { stage: stage.Acceptance, input: { revision, planReviewId } }, {
-        ...result, parentReviewId: planReviewId, revision,
-      }));
+      return textResult(await reviewAcceptance(reviews, invoke, ctx, input));
     },
   });
 }
@@ -180,6 +200,41 @@ function registerLookup(bb: BbPluginApi, reviews: ReviewStore) {
   });
 }
 
+const stageOutcome = z.union([receipt, z.looseObject({ error: z.string() })]);
+
+const workflowRpc = defineRpcContract({
+  "jev.workflow.requirements": {
+    input: z.object({ threadId: z.string().min(1).max(128), input: requirementsInput }),
+    output: stageOutcome,
+  },
+  "jev.workflow.plan": {
+    input: z.object({ threadId: z.string().min(1).max(128), input: planInput }),
+    output: stageOutcome,
+  },
+  "jev.workflow.acceptance": {
+    input: z.object({ threadId: z.string().min(1).max(128), input: acceptanceInput }),
+    output: stageOutcome,
+  },
+});
+
+function stageAudience(
+  threadId: string, context: ExperimentalPluginRpcHandlerContext,
+): Audience {
+  return { threadId, signal: context.experimental_signal };
+}
+
+/** Файловый RPC стадий: тот же обработчик и хранилище, что у агентских инструментов. */
+function registerStageRpc(bb: BbPluginApi, reviews: ReviewStore, invoke: Invoke) {
+  bb.rpc.register(workflowRpc, {
+    "jev.workflow.requirements": ({ threadId, input }, context) =>
+      reviewRequirements(reviews, invoke, stageAudience(threadId, context), input),
+    "jev.workflow.plan": ({ threadId, input }, context) =>
+      reviewPlan(reviews, invoke, stageAudience(threadId, context), input),
+    "jev.workflow.acceptance": ({ threadId, input }, context) =>
+      reviewAcceptance(reviews, invoke, stageAudience(threadId, context), input),
+  }, { experimental_discoverable: true });
+}
+
 export function registerWorkflow(bb: BbPluginApi, getKey: () => Promise<string | undefined>, stats: ReturnType<typeof openStats>) {
   const reviews = openReviews(bb.storage.kv);
   const invoke = createInvoker(getKey, stats);
@@ -187,4 +242,5 @@ export function registerWorkflow(bb: BbPluginApi, getKey: () => Promise<string |
   registerPlan(bb, reviews, invoke);
   registerAcceptance(bb, reviews, invoke);
   registerLookup(bb, reviews);
+  registerStageRpc(bb, reviews, invoke);
 }

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import test, { type TestContext } from "node:test";
-import { zstdDecompressSync } from "node:zlib";
-import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
-import { createPlugin } from "./server.ts";
+import test from "node:test";
 import { freshness, receipt, refusal } from "./workflow-records.ts";
+import {
+  mockTransport, observed, readRequest, usePlugin,
+} from "./workflow-fixtures.ts";
 
 const threadId = "arena-fixture";
 const revision = "a".repeat(64);
@@ -21,45 +21,6 @@ const execution = {
   testOutput: "Count test PASS. Null must throw, got 0. Reload check was skipped.",
 };
 const lookupMethod = "jev.workflow.receipt";
-
-function usePlugin(t: TestContext, key?: string) {
-  const { bb, harness } = createFakePluginHost({ pluginId: "bb-jev" });
-  t.after(() => harness.lifecycle.dispose());
-  createPlugin(undefined, () => key)(bb);
-  return {
-    harness,
-    async call(name: string, input: unknown, caller = threadId) {
-      const response = await harness.behavior.callAgentTool(name, input, { threadId: caller });
-      assert.ok(typeof response === "object");
-      const entry = response.content[0];
-      assert.equal(entry.type, "text");
-      return JSON.parse(entry.text) as unknown;
-    },
-  };
-}
-
-function observed(outcome: "passed" | "failed" | "inconclusive") {
-  return {
-    type: "choice", choice: outcome, confidence: 1,
-    probabilities: { passed: Number(outcome === "passed"), failed: Number(outcome === "failed"), inconclusive: Number(outcome === "inconclusive") },
-  };
-}
-
-function readRequest(request: RequestInit) {
-  const compressed = new Headers(request.headers).get("content-encoding") === "zstd";
-  const payload = compressed ? zstdDecompressSync(request.body as Uint8Array).toString() : String(request.body);
-  return JSON.parse(payload) as { questions: Record<string, unknown>; state: string };
-}
-
-function mockTransport(t: TestContext) {
-  return t.mock.method(globalThis, "fetch", async (_url: string, request: RequestInit) => {
-    const body = readRequest(request);
-    const ids = Object.keys(body.questions);
-    const outcomes = { R1: "passed", R2: "failed", R3: "inconclusive" } as const;
-    const answers = Object.fromEntries(ids.map((id) => [id, observed(outcomes[id as keyof typeof outcomes] ?? "passed")]));
-    return Response.json({ model: "jev-fixture", usage: { input_tokens: 150 }, answers });
-  });
-}
 
 function sentState(transport: ReturnType<typeof mockTransport>, index: number) {
   const [, request] = transport.mock.calls[index].arguments;

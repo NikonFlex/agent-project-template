@@ -353,10 +353,8 @@ def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def _python() -> str:
     """Интерпретатор тестов: окружение worktree, если оно есть, иначе текущий."""
-    for candidate in (ROOT / ".venv/welta/bin/python3", ROOT / ".venv/bin/python3"):
-        if candidate.is_file():
-            return str(candidate)
-    return sys.executable
+    candidate = ROOT / ".venv/bin/python3"
+    return str(candidate) if candidate.is_file() else sys.executable
 
 
 def _diff_stats(worktree: Path, base: str) -> tuple[int, list[str]]:
@@ -438,7 +436,7 @@ def _run_hidden_tests(worktree: Path, task: dict) -> tuple[int, int]:
     if not tests:
         return 0, 0
     ref = task.get("reference_commit")
-    with tempfile.TemporaryDirectory(prefix="welta-arena-score-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="arena-score-") as tmp:
         copy = _copy(worktree, Path(tmp))
         pytests = [t for t in tests if t.startswith("tests/")]
         selftests = [t for t in tests if not t.startswith("tests/")]
@@ -516,7 +514,7 @@ def _score_tests(worktree: Path, task: dict) -> tuple[int, int, bool]:
     mutants = _mutants(task)
     if not tests or not mutants:
         return 0, len(mutants), False
-    with tempfile.TemporaryDirectory(prefix="welta-arena-tests-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="arena-tests-") as tmp:
         parent = Path(tmp)
         green = _run([_python(), "-m", "pytest", "-q", *tests],
                      _copy(worktree, parent / "base")).returncode == 0
@@ -547,19 +545,20 @@ def _changed_ranges(worktree: Path, base: str, path: str) -> list[tuple[int, int
 
 
 def _crap_max(worktree: Path, base: str, changed: list[str]) -> float | None:
-    """Максимальный CRAP изменённых функций welta: тесты с покрытием филиалов + radon."""
+    """Максимальный CRAP изменённых функций Python: тесты с покрытием филиалов + radon."""
     from importlib.util import find_spec
 
-    targets = [p for p in changed if p.startswith("welta/") and p.endswith(".py")]
+    targets = [p for p in changed
+               if p.endswith(".py") and (worktree / p).is_file() and not p.startswith("tests/")]
     if not targets or find_spec("radon") is None:
         return None
     from nightly_audit import file_scores
 
-    with tempfile.TemporaryDirectory(prefix="welta-arena-crap-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="arena-crap-") as tmp:
         copy = _copy(worktree, Path(tmp))
         coverage_path = Path(tmp) / "coverage.json"
         _run([_python(), "-m", "pytest", "-q", "--ignore=tests/e2e", "-m", "not slow",
-              "--cov=welta", "--cov-branch",
+              "--cov", "--cov-branch",
               f"--cov-report=json:{coverage_path}"], copy)
         if not coverage_path.exists():
             return None
@@ -999,7 +998,7 @@ def _selftest_repo(parent: Path, files: dict[str, str]) -> tuple[Path, str]:
 
 
 def _selftest_score(bad: list[str]) -> None:
-    with tempfile.TemporaryDirectory(prefix="welta-arena-st-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="arena-st-") as tmp:
         repo, base = _selftest_repo(Path(tmp), {
             "app.py": APP_BROKEN,
             "tests/test_app.py": "from app import double\n\n\ndef test_ok() -> None:\n"
@@ -1062,7 +1061,7 @@ def _selftest_review(bad: list[str]) -> None:
             "## Находки\n- posting.py: пропавшая строка даёт TOO_MANY, нужен UNKNOWN_LINE\n"
             "### Снятые подозрения\n- ready: both_known — переписка эквивалентна\n", (1, 1, 0)),
     }
-    with tempfile.TemporaryDirectory(prefix="welta-arena-rev-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="arena-rev-") as tmp:
         for name, (text, expected) in cases.items():
             _write(Path(tmp) / name / "tmp/review.md", text)
             got = _score_review(Path(tmp) / name, task)
@@ -1127,7 +1126,7 @@ def _selftest_misc(bad: list[str]) -> None:
 
 def _selftest_tests(bad: list[str]) -> None:
     """Тесты агента: слабые не убивают мутанта, сильные убивают, падающие на верном коде — нет."""
-    with tempfile.TemporaryDirectory(prefix="welta-arena-tests-st-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="arena-tests-st-") as tmp:
         repo, base = _selftest_repo(Path(tmp), {
             "app.py": APP_RIGHT,
             "tests/test_spec.py": "from app import double\n\n\ndef test_double() -> None:\n"
@@ -1330,8 +1329,8 @@ def selftest() -> int:
             {"id": "jev", "jev": True, "prompt_suffix": " +jev"},
         ],
         "tasks": [
-            {"id": "parser", "type": "парсер", "prompt": "сделай разбор", "zone": ["welta/x.py"]},
-            {"id": "ui", "type": "фича + UI", "prompt": "сделай страницу", "zone": ["welta/y.py"]},
+            {"id": "parser", "type": "парсер", "prompt": "сделай разбор", "zone": ["src/x.py"]},
+            {"id": "ui", "type": "фича + UI", "prompt": "сделай страницу", "zone": ["src/y.py"]},
         ],
     }
     runs = _selftest_plan(bad, config)
@@ -1456,7 +1455,7 @@ def _body(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    return bb_cli.main("Арена моделей Welta", selftest, _add_args, _body)
+    return bb_cli.main("Арена моделей", selftest, _add_args, _body)
 
 
 if __name__ == "__main__":
