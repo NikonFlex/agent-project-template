@@ -57,6 +57,26 @@ def test_find_by_testid_prefix_and_text(agent_page):
     assert by_text["occludedBy"] == []
 
 
+def test_names_ignore_aria_hidden_markup(agent_page):
+    open_page(agent_page, "plain.html")
+    agent_page.evaluate("""() => document.body.insertAdjacentHTML("beforeend", `
+        <label for="external">Имя<span aria-hidden="true">*</span></label>
+        <input id="external" data-testid="names.external">
+        <label>Город<span aria-hidden="true">*</span><input data-testid="names.wrapped"></label>
+        <span id="role">Роль<span aria-hidden="true">*</span></span>
+        <input aria-labelledby="role" data-testid="names.reference">
+        <button data-testid="names.button"><span aria-hidden="true">✓</span>Готово</button>
+    `)""")
+    names = {
+        item["testid"]: item["name"]
+        for item in agent(agent_page, "find", {"testid": "names.*"})
+    }
+    assert names == {
+        "names.external": "Имя", "names.wrapped": "Город",
+        "names.reference": "Роль", "names.button": "Готово",
+    }
+
+
 def test_act_click_type_select_and_refusals(agent_page):
     open_page(agent_page, "page.html")
     assert act(agent_page, "orders.add", "click") == {"ok": True}
@@ -70,6 +90,20 @@ def test_act_click_type_select_and_refusals(agent_page):
     assert act(agent_page, "orders.export", "click") == {"ok": False, "error": "disabled"}
     assert act(agent_page, "нет.такого", "click") == {"ok": False, "error": "not_found"}
     assert act(agent_page, "orders.add", "select", "x") == {"ok": False, "error": "unsupported"}
+
+
+def test_act_cannot_modify_readonly_fields(agent_page):
+    open_page(agent_page, "plain.html")
+    agent_page.evaluate("""() => document.body.insertAdjacentHTML("beforeend", `
+        <input readonly value="Имя" data-testid="readonly.name">
+        <textarea readonly data-testid="readonly.comment">Комментарий</textarea>
+    `)""")
+    for testid, value in (("readonly.name", "Имя"), ("readonly.comment", "Комментарий")):
+        target = agent_page.get_by_test_id(testid)
+        assert act(agent_page, testid, "focus") == {"ok": True}
+        for call in (("type", "Новый текст"), ("clear",)):
+            assert act(agent_page, testid, *call) == {"ok": False, "error": "unsupported"}
+            assert target.input_value() == value
 
 
 def test_act_click_on_covered_button_names_the_cover(agent_page):

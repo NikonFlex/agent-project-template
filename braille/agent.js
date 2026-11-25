@@ -68,6 +68,12 @@
     return String(text ?? "").replace(/\s+/g, " ").trim();
   }
 
+  function nameText(node) {
+    if (!node || (node instanceof Element && node.getAttribute("aria-hidden") === "true")) return "";
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+    return Array.from(node.childNodes, nameText).join("");
+  }
+
   function roleOf(el) {
     const explicit = (el.getAttribute("role") || "").trim().split(/\s+/)[0];
     if (explicit) return explicit;
@@ -82,22 +88,23 @@
   function labelFor(el) {
     if (el.id) {
       const label = Array.from(document.querySelectorAll("label")).find((l) => l.htmlFor === el.id);
-      if (squash(label?.textContent)) return squash(label.textContent);
+      const text = squash(nameText(label));
+      if (text) return text;
     }
     const wrapping = el.closest("label");
-    return wrapping && wrapping !== el ? squash(wrapping.textContent) : "";
+    return wrapping && wrapping !== el ? squash(nameText(wrapping)) : "";
   }
 
   /** Имя в дереве доступности: aria-labelledby, aria-label, подпись, alt, текст, title/placeholder. */
   function nameOf(el) {
     const labelledBy = el.getAttribute("aria-labelledby");
     const joined = (labelledBy || "").split(/\s+/)
-      .map((id) => squash(document.getElementById(id)?.textContent)).filter(Boolean).join(" ");
+      .map((id) => squash(nameText(document.getElementById(id)))).filter(Boolean).join(" ");
     const named = joined || squash(el.getAttribute("aria-label")) || labelFor(el)
       || squash(el.getAttribute("alt"));
     if (named) return named;
     const tag = el.tagName.toLowerCase();
-    const content = ["input", "textarea", "select"].includes(tag) ? "" : squash(el.textContent);
+    const content = ["input", "textarea", "select"].includes(tag) ? "" : squash(nameText(el));
     return content || squash(el.getAttribute("title")) || squash(el.getAttribute("placeholder"));
   }
 
@@ -418,7 +425,9 @@
       el.dispatchEvent(new Event("change", { bubbles: true }));
       return { ok: true };
     }
-    if (isSelect || !(action === "type" || action === "clear")) return { ok: false, error: "unsupported" };
+    if (isSelect || el.readOnly || !(action === "type" || action === "clear")) {
+      return { ok: false, error: "unsupported" };
+    }
     el.focus();
     setNativeValue(el, action === "clear" ? "" : (value ?? ""));
     el.dispatchEvent(new Event("input", { bubbles: true }));
