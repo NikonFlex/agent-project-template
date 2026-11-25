@@ -48,6 +48,8 @@ export function openStats(storage: BbPluginApi["storage"]) {
     "SELECT verdict, calls, input_tokens, without_usage FROM jev_counts WHERE scope = ?",
   );
   const readTotal = () => summarize(read.all("total"));
+  const readJevstice = () => summarize(read.all("jevstice"));
+  const totalInputTokens = () => readTotal().inputTokens + readJevstice().inputTokens;
   const readBalance = db.prepare<[], BalanceSnapshot>(
     "SELECT amount_usd, input_tokens, observed_at FROM jev_balance WHERE id = 1",
   );
@@ -61,13 +63,17 @@ export function openStats(storage: BbPluginApi["storage"]) {
   });
   return {
     record,
+    recordJevstice(tokens: number | null) {
+      add.run("jevstice", tokens === null ? status.Unavailable : status.Passed, tokens ?? 0, Number(tokens === null));
+    },
+    calls() { return readTotal().calls + readJevstice().calls; },
     setBalance: db.transaction((amountUsd: number) => {
-      saveBalance.run(amountUsd, readTotal().inputTokens, Date.now());
+      saveBalance.run(amountUsd, totalInputTokens(), Date.now());
     }),
     balance() {
       const snapshot = readBalance.get();
       if (!snapshot) return null;
-      const spentUsd = costUsd(readTotal().inputTokens - snapshot.input_tokens);
+      const spentUsd = costUsd(totalInputTokens() - snapshot.input_tokens);
       return {
         snapshotUsd: snapshot.amount_usd,
         snapshotAt: snapshot.observed_at,
@@ -78,6 +84,7 @@ export function openStats(storage: BbPluginApi["storage"]) {
       return {
         session: threadId ? summarize(read.all(`thread:${threadId}`)) : null,
         total: readTotal(),
+        jevstice: readJevstice(),
         pricePerMillionInputTokensUsd,
       };
     },

@@ -130,10 +130,10 @@ def _env(bin_dir: Path) -> dict[str, str]:
     return env
 
 
-def _run(repo: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _run(repo: Path, env: dict[str, str], *flags: str) -> subprocess.CompletedProcess[str]:
     """Публичный вход из cwd временного репозитория: `run <номер>` без --request-file."""
     return subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "tools.rundo", "run", NUMBER],
+        [sys.executable, "-m", "tools.rundo", "run", NUMBER, *flags],
         cwd=repo, env=env, check=False, capture_output=True, text=True, timeout=240,
     )
 
@@ -251,6 +251,7 @@ def test_full_pipeline_e2e_with_fake_bb(tmp_path):
     _ok(done)
 
     entries = _entries(log_path)
+    assert all("bb-jevstice" not in call["argv"] for call in entries)
     spawns = _spawns(entries)
     models = [_opt(argv, "--model") for argv in spawns]
     assert models == ["gpt-6.2-sol", "gemini-4-neon",
@@ -423,3 +424,20 @@ def test_second_run_resumes_without_new_threads(tmp_path):
     assert changed.returncode == 1
     assert "ревизия изменилась после приёмки" in changed.stderr
     assert len(_spawns(_entries(log_path))) == first
+
+
+def test_jevstice_is_opt_in_and_binds_before_planner(tmp_path):
+    repo, _ = _make_repo(tmp_path)
+    bin_dir, _, log, _ = _install_fake(tmp_path)
+    _ok(_run(repo, _env(bin_dir), "--jevstice"))
+
+    entries = _entries(log)
+    activation = next(index for index, call in enumerate(entries)
+                      if call["argv"][3:5] == ["bb-jevstice", "jevstice.session.on"])
+    first_role = entries.index({"argv": _spawns(entries)[0]})
+    assert activation < first_role
+    _, exchange, state = _exchange(repo)
+    assert state["jevstice"] is True
+    assert set(_json(exchange / "jevstice.input.json")) == {"threadId", "request"}
+    plan_prompt = Path(_opt(_spawns(entries)[0], "--prompt-file") or "")
+    assert "jevstice_requirements" in plan_prompt.read_text(encoding="utf-8")

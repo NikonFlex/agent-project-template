@@ -22,6 +22,7 @@ class State:
     parent: str
     token: str
     request_file: str | None = None
+    jevstice: bool = False
     base: str | None = None
     worktree: str | None = None
     stage: str = "worktree"
@@ -45,6 +46,7 @@ class State:
         return {
             "number": self.number,
             "requestFile": self.request_file,
+            "jevstice": self.jevstice,
             "project": self.project,
             "parentId": self.parent,
             "token": self.token,
@@ -76,6 +78,7 @@ class State:
             parent=str(data["parentId"]),
             token=str(data["token"]),
             request_file=data.get("requestFile"),
+            jevstice=data.get("jevstice", False),
             base=data.get("base"),
             worktree=data.get("worktree"),
             stage=str(data.get("stage", "worktree")),

@@ -12,7 +12,7 @@
 - **Рундо** проводит реальную задачу через план, ревью, тест, реализацию и приёмку по фразе
   «реализуй задачу #N через Рундо». [Установка и запуск](docs/workflow.md).
 - Навыки процесса в `.agents/skills/` (копии в `.claude/skills/`): `pr-review` (гипотезное ревью + `jev_fact_check`), `nightly-audit` (ночной контур Фазы 2 и аудит спек), `spec-grill` (допрос перед правкой спек), `clean-contour-check`.
-- [Плагины BB](docs/plugins.md) — исходники и манифесты `plugins/bb-jev`, `plugins/limits-card`, `plugins/bb-antigravity-usage`, `plugins/glm-idle`.
+- [Плагины BB](docs/plugins.md) — Jev и Jevstice, карточка Limits, квоты Antigravity и очередь GLM.
 - Инструменты в `tools/` и конфиги в `config/`:
   - `tools/bb_arena.py`, `config/bb_arena.json`, `config/arena/review-01.patch` — Арена моделей, скоринг скрытых тестов и цепочка `Jev v2`.
   - `tools/bb_tree.py`, `config/bb_models.json` — дерево тредов и метрики токенов/цены.

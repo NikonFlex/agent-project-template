@@ -360,12 +360,17 @@ def _receipt_lookup(payload: dict, state: dict, knobs: dict) -> dict:
 
 def _rpc(argv: list[str], state: dict, knobs: dict) -> dict:
     plugin, method = argv[3], argv[4]
-    if plugin != "bb-jev":
+    if plugin not in {"bb-jev", "bb-jevstice"}:
         raise SystemExit(f"fake bb: неизвестный плагин {plugin!r}")
     input_file = _opt(argv, "--input-file")
     if not input_file:
         raise SystemExit("fake bb: rpc без --input-file")
     payload = json.loads(Path(input_file).read_text(encoding="utf-8"))
+    if plugin == "bb-jevstice" and method == "jevstice.session.on":
+        assert payload["threadId"] == knobs["parent"]
+        assert "demo.add" in payload["request"]
+        assert not state.get("threads")
+        return {"active": True}
     if method == "jev.workflow.receipt":
         return _receipt_lookup(payload, state, knobs)
     return _receipt(method, payload, state, knobs)

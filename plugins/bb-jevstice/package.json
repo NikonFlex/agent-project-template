@@ -1,0 +1,36 @@
+{
+  "name": "bb-jevstice",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "bb": ">=0.50", "bbPluginSdk": ">=0.6.157" },
+  "bb": {
+    "name": "Jevstice",
+    "description": "Диагностика работы агента на основе Jevstice v2.4.0",
+    "branding": { "icon": "ClipboardCheck" },
+    "server": "./server.ts",
+    "app": "./app.tsx",
+    "skills": ["skills"]
+  },
+  "scripts": {
+    "prepare": "node build-upstream.mjs",
+    "check": "tsc",
+    "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test *.test.ts"
+  },
+  "dependencies": {
+    "jevstice": "https://codeload.github.com/veschin/jevstice/tar.gz/a38481a75b35cffb1b6c0d5911c8afe6fe0bdb38",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.157",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/bun": "^1.4.2",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.3.0",
+    "better-sqlite3": "^12.0.0",
+    "cron-parser": "^5.5.0",
+    "esbuild": "0.27.3",
+    "hono": "^4.11.9",
+    "typescript": "^5.8.0"
+  }
+}

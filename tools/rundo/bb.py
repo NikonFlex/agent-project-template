@@ -94,9 +94,9 @@ class Bb:
     def environment(self, environment_id: str) -> dict:
         return self.json(["environment", "show", environment_id, "--json"])
 
-    def rpc(self, method: str, input_file: Path) -> dict:
+    def rpc(self, method: str, input_file: Path, *, plugin: str = "bb-jev") -> dict:
         value = self.json([
-            "plugin", "rpc", "call", "bb-jev", method,
+            "plugin", "rpc", "call", plugin, method,
             "--input-file", str(input_file), "--json",
         ])
         if not isinstance(value, dict):

@@ -7,7 +7,8 @@
 | Плагин | Назначение и состояние |
 |---|---|
 | [bb-jev](../plugins/bb-jev/) | Проверка требований, плана и приёмки через TypeSafe. Квитанции доступны между тредами. Рундо вызывает стадии через файловые RPC `jev.workflow.requirements`, `jev.workflow.plan` и `jev.workflow.acceptance`. В тестах есть подменённый транспорт. Для живых проверок нужна своя интеграция. |
-| [limits-card](../plugins/limits-card/README.md) | Карточка квот и балансов. Использует BB Provider Usage и доступные источники метрик. |
+| [bb-jevstice](../plugins/bb-jevstice/README.md) | Диагностика из шапки треда, 15 инструментов и журнал. Использует ключ TypeSafe из установленного `bb-jev`. |
+| [limits-card](../plugins/limits-card/README.md) | Карточка квот и балансов. Строка Jev показывает баланс и число проверок из `bb-jev`, включая запросы Jevstice. |
 | [bb-antigravity-usage](../plugins/bb-antigravity-usage/README.md) | Источник квот и балансов. Для переносимости локальные пути помощника и лаунчера задаются окружением. На исходной установке обнаружена ошибка валидации `listResources`. |
 | [glm-idle](../plugins/glm-idle/README.md) | Очередь ZCode Idle и расписание вне пика. Живой запуск на чтение подтверждён, проверка записи в worktree остаётся отдельным этапом. |
 

@@ -10,6 +10,7 @@ from pathlib import Path
 
 PROJECT_ENV = "BB_PROJECT_ID"
 PARENT_ENV = "BB_THREAD_ID"
+JEVSTICE_ENV = "RUNDO_JEVSTICE"
 PIPELINE_DIR = Path("tmp/rundo")
 GATE_PATH_THRESHOLD = 5
 CONTRACTS = frozenset({"known", "new", "unknown"})
