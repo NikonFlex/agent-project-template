@@ -1,7 +1,12 @@
 import { definePluginApp, experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
+import { JevActivity } from "./activity-banner.tsx";
 import { modeRpc } from "./mode-rpc.ts";
 
 export default definePluginApp(app => {
+  app.composer.customize({
+    id: "jev-activity", scopes: ["thread"],
+    banners: [{ id: "jev-status", chrome: "bare", component: JevActivity }],
+  });
   app.slots.experimental_threadAction({
     id: "jev-mode", title: "Jev", icon: "ClipboardCheck", group: "jev", placement: "header",
     useData({ threadIds }) {

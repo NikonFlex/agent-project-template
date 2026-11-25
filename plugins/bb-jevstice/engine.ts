@@ -50,11 +50,13 @@ export function createEngine(callbacks: Callbacks) {
       if (reply?.continue) callbacks.note("not_checked", "Факт-чек запрошен; нужен jevstice_fact_check");
     },
     close() { emit("session_shutdown", {}); },
-    async call(name: string, args: unknown, signal: AbortSignal) {
+    async call(name: string, args: unknown, signal: AbortSignal, automatic = false) {
       const tool = tools.get(name);
       if (tool === undefined) throw new Error(`Неизвестная проверка ${name}`);
       if (boundedEvidence(JSON.stringify(args)) === null) {
-        return { content: [{ type: "text" as const, text: "Материал не проверен: объём или чувствительные данные." }], isError: true };
+        const reason = "Материал не проверен: объём или чувствительные данные.";
+        if (automatic) callbacks.note("not_checked", { name, automatic, reason });
+        return { content: [{ type: "text" as const, text: reason }], isError: true };
       }
       const result = record(await tool.execute("bb", args, signal, undefined, context));
       const parts = Array.isArray(result?.content) ? result.content : [];
@@ -62,7 +64,7 @@ export function createEngine(callbacks: Callbacks) {
         const value = record(part)?.text;
         return typeof value === "string" ? [{ type: "text" as const, text: value }] : [];
       });
-      callbacks.note("check", { name, details: result?.details, isError: result?.isError === true });
+      callbacks.note("check", { name, ...(automatic ? { automatic } : {}), details: result?.details, isError: result?.isError === true });
       return { content: texts, isError: result?.isError === true };
     },
   };

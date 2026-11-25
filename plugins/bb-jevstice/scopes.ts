@@ -2,9 +2,12 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Judge } from "jevstice/src/judge.js";
+import { summarizeActivity } from "./activity.ts";
 import { createEngine, type Engine } from "./engine.ts";
 import type { openJournal } from "./journal.ts";
-import { boundedEvidence, observedTools, ownerText } from "./observations.ts";
+import { activityTag } from "./mode-rpc.ts";
+import { boundedEvidence, observedTools, ownerText, record } from "./observations.ts";
+import { createTurnReview, type TurnReview } from "./turn-review.ts";
 
 type Journal = ReturnType<typeof openJournal>;
 type Thread = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["get"]>>;
@@ -18,6 +21,7 @@ type Scope = {
   children: Set<string>;
   childEnvironmentId?: string;
   used: number;
+  pending: number;
   unavailable: number;
   inputTokens: number;
   outputTokens: number;
@@ -25,6 +29,8 @@ type Scope = {
   tail: Promise<unknown>;
   cursors: Map<string, number>;
   workspace: Thread;
+  turn?: TurnReview;
+  abort: AbortController;
 };
 
 export function createScopes(bb: BbPluginApi, journal: Journal, judge: Judge, keyReady: () => Promise<boolean>) {
@@ -83,8 +89,8 @@ export function createScopes(bb: BbPluginApi, journal: Journal, judge: Judge, ke
     if (request !== undefined && owner === null) throw new Error("Постановка недоступна для Jevstice");
     const scope: Scope = {
       projectId: thread.projectId, request: owner, children: new Set(),
-      used: 0, unavailable: 0, inputTokens: 0, outputTokens: 0, closed: false, tail: Promise.resolve(),
-      cursors: new Map([[thread.id, cursor]]), workspace: thread,
+      used: 0, pending: 0, unavailable: 0, inputTokens: 0, outputTokens: 0, closed: false, tail: Promise.resolve(),
+      cursors: new Map([[thread.id, cursor]]), workspace: thread, abort: new AbortController(),
       engine: createEngine({
         scopeId: thread.id,
         judge: async (state, questions) => {
@@ -97,15 +103,13 @@ export function createScopes(bb: BbPluginApi, journal: Journal, judge: Judge, ke
           if (boundedEvidence(JSON.stringify(state), 96_000) === null) {
             return { ok: false, kind: "unusable", problem: "Материал превысил лимит или содержит чувствительные данные" };
           }
-          scope.used += 1;
-          const result = await judge(state, questions);
-          if (result.ok && result.usage) {
-            scope.inputTokens += result.usage.inputTokens;
-            scope.outputTokens += result.usage.outputTokens;
-          }
-          return result;
+          return sendToJudge(scope, thread.id, state, questions);
         },
-        note: (kind, value) => { if (!scope.closed) journal.note(thread.id, kind, value); },
+        note(kind, value) {
+          if (scope.closed) return;
+          journal.note(thread.id, kind, value);
+          if (summarizeActivity(kind, value)) notifyActivity(thread.id);
+        },
         archive: journal.archive(`${thread.id}/${randomUUID()}`),
         readArtifact: async (name, limit) => {
           try { return await readArtifact(scope.workspace, name, limit); } catch { return null; }
@@ -116,10 +120,32 @@ export function createScopes(bb: BbPluginApi, journal: Journal, judge: Judge, ke
     if (owner !== null) await queue(scope, () => scope.engine.owner(owner));
   }
 
+  function notifyActivity(threadId: string) {
+    bb.rpc.experimental_invalidate([activityTag(threadId)]);
+  }
+
+  async function sendToJudge(scope: Scope, threadId: string, ...input: Parameters<Judge>) {
+    scope.used += 1;
+    scope.pending += 1;
+    if (scope.pending === 1) notifyActivity(threadId);
+    try {
+      const result = await judge(...input);
+      if (result.ok && result.usage) {
+        scope.inputTokens += result.usage.inputTokens;
+        scope.outputTokens += result.usage.outputTokens;
+      }
+      return result;
+    } finally {
+      scope.pending -= 1;
+      if (!scope.closed && scope.pending === 0) notifyActivity(threadId);
+    }
+  }
+
   const stop = (threadId: string) => {
     const scope = roots.get(threadId);
     if (scope) {
       scope.closed = true;
+      scope.abort.abort();
       scope.engine.close();
       roots.delete(threadId);
     }
@@ -159,12 +185,24 @@ export function createScopes(bb: BbPluginApi, journal: Journal, judge: Judge, ke
   async function consume(scope: Scope, row: { type: string; data: unknown }, owner: boolean) {
     if (row.type === "client/turn/requested" && owner) {
       const text = ownerText(row.data);
+      scope.turn = text === null ? undefined : createTurnReview(text);
       if (text !== null) await scope.engine.owner(text);
     } else if (row.type === "item/completed") {
       const observations = observedTools(row.data);
       scope.unavailable += observations.unavailable;
-      for (const observation of observations.items) await scope.engine.observe(observation);
+      for (const observation of observations.items) {
+        if (owner) scope.turn?.observe(observation);
+        await scope.engine.observe(observation);
+      }
     } else if (row.type === "turn/completed") {
+      if (owner) {
+        const material = scope.turn?.material();
+        scope.turn = undefined;
+        if (material && record(row.data)?.status === "completed") {
+          await scope.engine.call("jev_review", material, scope.abort.signal, true);
+          return;
+        }
+      }
       await scope.engine.complete();
     }
   }
@@ -174,6 +212,12 @@ export function createScopes(bb: BbPluginApi, journal: Journal, judge: Judge, ke
       const target = scopeFor(thread);
       if (!target) return "off" as const;
       return target.key === thread.id ? "on" as const : "inherited" as const;
+    },
+    activity(thread: Thread) {
+      const target = scopeFor(thread);
+      return target ? {
+        scope: target.key, pending: target.scope.pending > 0, last: journal.activity(target.key),
+      } : { scope: null, pending: false, last: null };
     },
     async activate(thread: Thread, request?: string) {
       const pending = starting.get(thread.id);
@@ -200,7 +244,11 @@ export function createScopes(bb: BbPluginApi, journal: Journal, judge: Judge, ke
             thread.environmentId !== target.scope.childEnvironmentId) {
           return { isError: true, content: [{ type: "text" as const, text: "Наблюдения из другого рабочего дерева не проверены." }] };
         }
-        return target.scope.engine.call(name, args, signal);
+        const before = target.scope.used;
+        const result = await target.scope.engine.call(name, args, signal);
+        if (thread.id === target.key && target.scope.used > before &&
+            (name === "jev_review" || name === "jev_acceptance")) target.scope.turn?.clear();
+        return result;
       });
     },
     advertised(thread: { id: string; parentThreadId: string | null }, project: string) {

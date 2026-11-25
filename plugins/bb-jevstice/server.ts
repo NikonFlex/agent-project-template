@@ -98,6 +98,9 @@ function registerMode(bb: BbPluginApi, scopes: ReturnType<typeof createScopes>) 
       if (!active && current === "on") stop(threadId);
       return scopes.mode(thread);
     },
+    async "jevstice.activity"({ threadId }) {
+      return scopes.activity(await bb.sdk.threads.get({ threadId }));
+    },
   }, { experimental_discoverable: true });
   return { activate, stop };
 }
