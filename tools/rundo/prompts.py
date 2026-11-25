@@ -25,6 +25,7 @@ class PromptContext:
     worktree: str
     exchange: str
     request: str
+    jevstice: bool = False
 
 
 def _preamble(role: Role, context: PromptContext) -> str:
@@ -103,4 +104,17 @@ BUILDERS = {
 
 
 def build(role: Role, context: PromptContext) -> str:
-    return BUILDERS[role](context)
+    prompt = BUILDERS[role](context)
+    if not context.jevstice:
+        return prompt
+    notes = {
+        Role.PLAN: (
+            "Включён Jevstice. Вызови jevstice_requirements с точными цитатами постановки. "
+            "Для ревью секций плана следуй навыку Jevstice и используй tmp/jevstice/plan.md."
+        ),
+        Role.IMPLEMENTATION: (
+            "После проверок вызови jevstice_acceptance с aspect=outcome. "
+            "Замечания Jevstice приложи к отчёту роли."
+        ),
+    }
+    return prompt + ("\n" + notes[role] + "\n" if role in notes else "")

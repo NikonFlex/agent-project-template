@@ -1,4 +1,4 @@
-"""Публичный вход: `python3 -m tools.rundo run <номер> [--request-file FILE]`.
+"""Публичный вход: `python3 -m tools.rundo run <номер> [--request-file FILE] [--jevstice]`.
 
 Запускается из текущего BB-треда; берёт `BB_PROJECT_ID` и `BB_THREAD_ID` из
 окружения. Итог — локальные артефакты прогона и короткий отчёт; GitHub не трогается.
@@ -14,6 +14,7 @@ from pathlib import Path
 
 from tools.rundo.artifacts import ArtifactError
 from tools.rundo.bb import BbFault
+from tools.rundo.config import JEVSTICE_ENV
 from tools.rundo.evidence import EvidenceError
 from tools.rundo.pipeline import Pipeline, PipelineError
 
@@ -25,7 +26,7 @@ FAILURES = (
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    return _run(Path.cwd(), args.number, args.request_file)
+    return _run(Path.cwd(), args.number, args.request_file, args.jevstice)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -44,14 +45,19 @@ def _parser() -> argparse.ArgumentParser:
     )
     run.add_argument("number", help="номер задачи, например 42")
     run.add_argument("--request-file", help="точная постановка вместо раздела файла задачи")
+    run.add_argument("--jevstice", action="store_true", help="включить диагностику Jevstice")
     return parser
 
 
-def _run(repo: Path, raw_number: str, request_file: str | None) -> int:
+def _run(repo: Path, raw_number: str, request_file: str | None, jevstice: bool) -> int:
     number = raw_number.strip().lstrip("#")
     if not number.isdigit():
         raise SystemExit(f"номер задачи должен быть числом, получено {raw_number!r}")
-    pipeline = Pipeline(repo, number, request_file, os.environ)
+    env = dict(os.environ)
+    env.pop(JEVSTICE_ENV, None)
+    if jevstice:
+        env[JEVSTICE_ENV] = "1"
+    pipeline = Pipeline(repo, number, request_file, env)
     try:
         return pipeline.run()
     except FAILURES as error:

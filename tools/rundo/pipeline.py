@@ -19,6 +19,7 @@ from tools.rundo.artifacts import ArtifactError
 from tools.rundo.bb import Bb, BbFault
 from tools.rundo.config import (
     ACTORS,
+    JEVSTICE_ENV,
     PARENT_ENV,
     PIPELINE_DIR,
     PROJECT_ENV,
@@ -98,6 +99,8 @@ class Pipeline:
     def _open(self) -> None:
         stored = self.store.load()
         if stored is not None:
+            if self.env.get(JEVSTICE_ENV) == "1" and not stored.jevstice:
+                raise PipelineError("Jevstice нужно включить при первом запуске Рундо")
             self.state = stored
             return
         self.state = self._create()
@@ -115,6 +118,7 @@ class Pipeline:
         return State(
             number=self.number, project=project, parent=parent, token=token,
             base=evidence.head(self.repo), worktree=str(worktree),
+            jevstice=self.env.get(JEVSTICE_ENV) == "1",
         )
 
     def _advance(self) -> None:
@@ -182,8 +186,20 @@ class Pipeline:
         self.request = self._request_text()
         self.exchange.mkdir(parents=True, exist_ok=True)
         (self.exchange / "request.md").write_text(self.request, encoding="utf-8")
+        if state.jevstice:
+            self._enable_jevstice()
         state.stage = Stage.PLAN.value
         self._commit()
+
+    def _enable_jevstice(self) -> None:
+        path = self.exchange / "jevstice.input.json"
+        artifacts.write_json(path, {
+            "threadId": self.state.parent,
+            "request": self._request_text(),
+        })
+        result = self.bb.rpc("jevstice.session.on", path, plugin="bb-jevstice")
+        if result.get("active") is not True:
+            raise PipelineError("Jevstice не подтвердил включение", file=str(path))
 
     def _ensure_worktree(self) -> None:
         path = Path(self.state.worktree or "")
@@ -269,6 +285,7 @@ class Pipeline:
     def _write_prompt(self, role: Role) -> Path:
         context = prompts.PromptContext(
             self.number, str(self.state.worktree), str(self.exchange), self._request_text(),
+            self.state.jevstice,
         )
         path = self.state_dir / "prompts" / f"{role.value}.md"
         path.parent.mkdir(parents=True, exist_ok=True)

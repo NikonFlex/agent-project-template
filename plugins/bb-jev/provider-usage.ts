@@ -7,6 +7,7 @@ const getResource = "provider-usage.v1.getResource";
 const resourceId = "jev-balance";
 const providerName = "Jev";
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const number = new Intl.NumberFormat("ru-RU");
 
 const contract = defineRpcContract({
   [listResources]: {
@@ -50,12 +51,13 @@ export function registerProviderUsage(bb: BbPluginApi, stats: ReturnType<typeof 
     },
     [getResource]: () => {
       const balance = stats.balance();
+      const balanceLabel = balance ? `≈ ${currency.format(balance.estimatedUsd)}` : "Баланс не задан";
       return {
         accountKey: null,
         observedAt: balance?.snapshotAt ?? null,
         usage: {
           status: "ok" as const, plan: null, accountEmail: null, windows: [],
-          planLabel: balance ? `≈ ${currency.format(balance.estimatedUsd)}` : "Баланс не задан",
+          planLabel: `${balanceLabel} · ${number.format(stats.calls())} выз.`,
         },
       };
     },

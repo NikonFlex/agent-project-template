@@ -18,9 +18,14 @@ export async function callTool(
   return JSON.parse(entry.text) as unknown;
 }
 
+export function createJevHost(t: TestContext) {
+  const host = createFakePluginHost({ pluginId: "bb-jev" });
+  t.after(() => host.harness.lifecycle.dispose());
+  return host;
+}
+
 export function usePlugin(t: TestContext, key?: string) {
-  const { bb, harness } = createFakePluginHost({ pluginId: "bb-jev" });
-  t.after(() => harness.lifecycle.dispose());
+  const { bb, harness } = createJevHost(t);
   createPlugin(undefined, () => key)(bb);
   return {
     harness,

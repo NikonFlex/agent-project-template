@@ -1,6 +1,7 @@
 import { cliCommand, defineCli, PluginCliError, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { checks, status } from "./checks.ts";
 import { judge, requestJev, type Judge } from "./judge.ts";
+import { registerJevsticePeer } from "./jevstice-peer.ts";
 import { openStats } from "./stats.ts";
 import { registerProviderUsage } from "./provider-usage.ts";
 import { registerWorkflow } from "./workflow.ts";
@@ -31,6 +32,7 @@ export function createPlugin(request: Judge = requestJev, envKey = () => process
     registerCli(bb.cli, getKey, stats);
     registerProviderUsage(bb, stats);
     registerWorkflow(bb, getKey, stats);
+    registerJevsticePeer(bb, { getKey, record: stats.recordJevstice });
   };
 }
 

@@ -139,7 +139,7 @@ test("Provider Usage reports the latest balance snapshot minus subsequent Jev sp
   assert.equal((await setBalance("10.00")).exitCode, 0);
   assert.match(JSON.stringify(await badge()), /≈ \$10\.00/);
   await useJev();
-  assert.match(JSON.stringify(await badge()), /≈ \$9\.96/);
+  assert.match(JSON.stringify(await badge()), /≈ \$9\.96 · 2 выз\./);
   assert.equal((await setBalance("0.01")).exitCode, 0);
   await useJev();
   assert.match(JSON.stringify(await badge()), /≈ \$0\.00/);
