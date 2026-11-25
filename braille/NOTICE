@@ -55,3 +55,7 @@ network.py, executor.py, session.py, evidence.py, selftest.py, __main__.py; вз
     install/check-runtime/check-build (решение docs/decisions.md);
   - команда selftest — наша: разбор шагов и сценариев, хосты, переходы сессии, противоречия,
     маскировка секретов без браузера; в tools/check.sh.
+
+Из коммита agent-braille 731f54dd09b130a25f872292e5e5ac59d87d0e83 перенесены
+два исправления runtime/inspect.ts: исключение aria-hidden из имени элемента
+и отказ от изменения значения поля с readonly через act().
