@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { createFakePluginHost, makePluginAgentConfigurationContext,
   makeThreadResponse } from "@get-bb/plugin-sdk/testing";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
@@ -30,7 +30,7 @@ function answer(question: JudgeQuestion) {
   return { name: question.name, mode: question.mode, label: selected,
     confidence: 1, probability: 1, score: 1 };
 }
-function fixture() {
+function fixture(t: TestContext, beforeJudge?: () => Promise<void>) {
   const root = makeThreadResponse({ id: "thr_parent", projectId: "proj_test" });
   const child = makeThreadResponse({ id: "thr_child", parentThreadId: root.id, projectId: root.projectId });
   const foreign = makeThreadResponse({ id: "thr_foreign", projectId: "proj_other" });
@@ -39,6 +39,7 @@ function fixture() {
   const calls: { state: unknown; questions: readonly JudgeQuestion[] }[] = [];
   const judge: Judge = async (state, questions) => {
     calls.push({ state, questions });
+    await beforeJudge?.();
     return { ok: true, answers: questions.map(answer), usage: { inputTokens: 1, outputTokens: 1 } };
   };
   const { bb, harness } = createFakePluginHost({
@@ -53,6 +54,7 @@ function fixture() {
     } },
   });
   createPlugin(judge)(bb);
+  t.after(() => harness.lifecycle.dispose());
   return { harness, root, child, foreign, rows, calls };
 }
 
@@ -70,8 +72,7 @@ test("accepts only observed, completed tool material and omits secret-looking ou
 });
 
 test("uses native Jevstice requirements and acceptance over observed cross-thread work", async t => {
-  const { harness, root, child, foreign, rows, calls } = fixture();
-  t.after(() => harness.lifecycle.dispose());
+  const { harness, root, child, foreign, rows, calls } = fixture(t);
   await harness.behavior.callRpc("jevstice.session.on", { threadId: root.id, request });
   const args = { items: [{ text: "Пустая строка отвергается.", source: "проверку пустой строки" }] };
   const call = (name: string, payload: unknown, threadId: string) =>
@@ -96,8 +97,7 @@ test("uses native Jevstice requirements and acceptance over observed cross-threa
 
 
 test("all upstream tools are advertised only for a participating BB session", async t => {
-  const { harness, root, child, foreign } = fixture();
-  t.after(() => harness.lifecycle.dispose());
+  const { harness, root, child, foreign } = fixture(t);
   const configuration = (thread: typeof root) => harness.behavior.resolveAgentConfiguration(
     makePluginAgentConfigurationContext({ thread, project: { id: thread.projectId } }));
 
@@ -108,8 +108,7 @@ test("all upstream tools are advertised only for a participating BB session", as
 });
 
 test("the header can enable a thread before its first prompt and reflects inherited mode", async t => {
-  const { harness, root, child, rows, calls } = fixture();
-  t.after(() => harness.lifecycle.dispose());
+  const { harness, root, child, rows, calls } = fixture(t);
   rows.length = 0;
   const modes = () => harness.behavior.callRpc("jevstice.mode.list", { threadIds: [root.id, child.id] });
   const set = (threadId: string, active: boolean) =>
@@ -125,8 +124,7 @@ test("the header can enable a thread before its first prompt and reflects inheri
 });
 
 test("header activation allows more than eight judge requests", async t => {
-  const { harness, root, calls } = fixture();
-  t.after(() => harness.lifecycle.dispose());
+  const { harness, root, calls } = fixture(t);
   await harness.behavior.callRpc("jevstice.mode.set", { threadId: root.id, active: true });
   for (let index = 1; index <= 9; index++) {
     await harness.behavior.callAgentTool("jevstice_consult", {
@@ -137,4 +135,45 @@ test("header activation allows more than eight judge requests", async t => {
   assert.equal(calls.length, 9);
   const current = await harness.behavior.runCli(["status"], { threadId: root.id });
   assert.equal(JSON.parse(current.stdout ?? "").used, 9);
+});
+
+test("an enabled chat reports live activity for an automatic review", { timeout: 5_000 }, async t => {
+  let start!: () => void;
+  let release!: () => void;
+  const started = new Promise<void>(resolve => { start = resolve; });
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  const { harness, root, rows, calls } = fixture(t, () => { start(); return waiting; });
+  const activity = () => harness.behavior.callRpc("jevstice.activity", { threadId: root.id });
+  assert.deepEqual(await activity(), { scope: null, pending: false, last: null });
+  await harness.behavior.callRpc("jevstice.mode.set", { threadId: root.id, active: true });
+  const settle = () => harness.behavior.emitThreadEvent("thread.idle", {
+    thread: root, lastAssistantText: null,
+  });
+  rows.push(row(root.id, 2, "client/turn/requested", input),
+    row(root.id, 3, "item/completed", command()),
+    row(root.id, 4, "turn/completed", { status: "completed" }));
+  await settle();
+  assert.equal(calls.length, 0);
+
+  rows.push(row(root.id, 5, "client/turn/requested", input),
+    row(root.id, 6, "item/completed", patch()),
+    row(root.id, 7, "item/completed", command()),
+    row(root.id, 8, "turn/completed", { status: "completed" }));
+  const completion = settle();
+  try {
+    await started;
+    assert.deepEqual(await activity(), { scope: root.id, pending: true, last: null });
+  } finally { release(); }
+  await completion;
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.questions[0]?.name, "review");
+  assert.match(JSON.stringify(calls[0]?.state), /demo\.py/);
+  assert.match(JSON.stringify(calls[0]?.state), /1 passed in 0\.1s/);
+  assert.deepEqual(await activity(), {
+    scope: root.id, pending: false,
+    last: { tool: "jev_review", state: "passed", automatic: true, confidence: 1 },
+  });
+  const status = await harness.behavior.runCli(["status"], { threadId: root.id });
+  assert.match(status.stdout ?? "", /"automatic": true/);
 });

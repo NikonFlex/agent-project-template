@@ -57,8 +57,8 @@ function edits(item: RecordValue): Observations {
     const patch = record(change);
     const path = boundedEvidence(patch?.path);
     const diff = boundedEvidence(patch?.diff);
-    if (!path || !diff || path.replaceAll("\\", "/").includes("/tmp/welta-pipeline/") ||
-        path.startsWith("tmp/welta-pipeline/")) return [];
+    if (!path || !diff || path.replaceAll("\\", "/").includes("/tmp/rundo/") ||
+        path.startsWith("tmp/rundo/")) return [];
     return [observation("edit", { path, input: diff }, diff, item.status !== "completed")];
   });
   return { items, unavailable: Math.max(1, changes.length) - items.length };
